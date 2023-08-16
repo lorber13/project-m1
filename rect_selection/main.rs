@@ -47,16 +47,16 @@ fn rect_from_pos2(p1: &Pos2, p2: &Pos2) -> Rect
 {
     let min_x = if p1.x <p2.x { p1.x }else{ p2.x};
     let min_y = if p1.y <p2.y { p1.y }else{ p2.y};
-    let left_top = Pos2::new(min_x, min_y);
+    let left_top = Pos2::new(min_x.round(), min_y.round());
     let max_x = if p1.x >p2.x { p1.x }else{ p2.x};
     let max_y = if p1.y >p2.y { p1.y }else{ p2.y};
-    let right_bottom = Pos2::new(max_x, max_y);
+    let right_bottom = Pos2::new(max_x.round(), max_y.round());
+
     Rect { min: left_top, max: right_bottom }
 }
 
 
 fn main() -> Result<(), eframe::Error> {
-    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let options = eframe::NativeOptions {
         decorated : false,
@@ -131,7 +131,9 @@ fn main() -> Result<(), eframe::Error> {
                  match space.hover_pos()
                 {
                     None => (),
-                    Some(p) => 
+                    Some(p_not_round) =>
+                    {
+                        let p = p_not_round.round();
                         match state
                         {
                             [None, None] | [Some(_), None]=> 
@@ -151,27 +153,37 @@ fn main() -> Result<(), eframe::Error> {
                                 state = [Some(p), None];
                             }
                         }
+                    } 
+                        
                 }
             }else if space.drag_released() //se è terminato il drag, si memorizza la posizione del puntatore
             {
-                if let Some(p2) = space.hover_pos()
+                if let Some(p_not_round) = space.hover_pos()
                 {
-                    if let Some(p1) = state[0]  //se il drag è stato rilasciato, necessariamente lo stato deve contenere già un punto
+                    let p2 = p_not_round.round();
+                    match state
                     {
-                        state = [Some(p1), Some(p2)];
-                        if DEBUG { println!("state = {:?}", state); }
-                    }else {
-                        //ERRORE: per rimediare si resetta lo stato
-                        if DEBUG {println!("DEBUG: error: state = [None, Some]")}
-                        state = [None, None];
+                        [Some(p1), None] => 
+                        {
+                            //se il drag è stato rilasciato, necessariamente lo stato deve contenere già un punto
+                            state = [Some(p1), Some(p2)];
+                            if DEBUG { println!("state = {:?}", state); }
+                        },
+                        _ => 
+                        {
+                            //ERRORE: per rimediare si resetta lo stato
+                            if DEBUG {println!("DEBUG: error: state = [None, Some]")}
+                            state = [None, None];
+                        }
                     }
                 }
-            }else   //duranre il drag & drop (quindi, solo se lo stato contiene già il primo punto), si disegna il rettangolo 
+            }else   //durante il drag & drop (quindi, solo se lo stato contiene già il primo punto), si disegna il rettangolo 
             {     
                 match space.hover_pos()
                 {
-                    Some(p) =>
+                    Some(p_not_round) =>
                     {
+                        let p = p_not_round.round();
                         match state
                         {
                             [None, None] | [Some(_), Some(_)] => (),
