@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use eframe::egui::{self};
+use eframe::egui;
+use image::codecs::{jpeg::JpegEncoder, gif::GifEncoder};
 use std::fs::write;
 use screenshots::Screen;
 use std::fs::*;
@@ -10,26 +11,21 @@ use arboard::{Clipboard, ImageData};
 
 
 
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 enum Enum { //Enum per selezione del formato
     Png,
-    JPG,
+    JPEG,
     GIF,
 }
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-enum Enum2{ //prova per la scelta del tipo di screenshot
+enum Enum2{ //Enum per la scelta del tipo di screenshot
     Fullscreen,
     Rectangle,
 }
 
-
-
-fn main() {
-    
-
+fn main() {  
     let options = eframe::NativeOptions::default();
     
     eframe::run_native(
@@ -39,7 +35,6 @@ fn main() {
     ).unwrap();
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 struct Content {
     output_format: Enum,
     area: Enum2,
@@ -47,14 +42,16 @@ struct Content {
 impl Default for Content{
     fn default() -> Self{
         Self { output_format: Enum::Png,
-        area: Enum2::Fullscreen, }
+        area: Enum2::Fullscreen,
+        }
     }
 }
+
 
  impl eframe::App for Content{
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let screens= Screen::all().expect("problema con gli screen");
+        let screens= Screen::all().expect("Mismatching type in Vec<Screen>");
            egui::CentralPanel::default().show(ctx, |ui|{
             ui.label("Capture Mode");
             ui.separator();
@@ -74,52 +71,51 @@ impl Default for Content{
                     ui.style_mut().wrap = Some(false);
                     ui.set_min_width(60.0);
                     ui.selectable_value(&mut self.output_format, Enum::Png, "Png");
-                    ui.selectable_value(&mut self.output_format, Enum::JPG, "JPG");
+                    ui.selectable_value(&mut self.output_format, Enum::JPEG, "JPEG");
                     ui.selectable_value(&mut self.output_format, Enum::GIF, "GIF");
                 });
                 ui.end_row();
             ui.separator();
-            // acquisizione dello screenshot in png
-            if ui.button("Acquisisci").clicked(){
+           
+            // gestione della pressione del pulsante "Acquire"
+            if ui.button("Acquire").clicked(){
                 for screen in screens.iter(){
-                    let img: screenshots::Image=screen.capture().expect("problema con l'acquisizione");
-                    let buffer=img.to_png(None).expect("problema con la conversione");
-                    write("screenshot.png", buffer.clone()).expect("problema con il salvataggio");
+                    let img=screen.capture().expect("Problem with the acquisition of the screenshot image"); //acquisizione dello screenshot con formato screenshot::Image
                     
-                    let mut ctx = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
-                    let image = image::open("screenshot.png").expect("problemi");
+                    //aggiungere checkbox per salvataggio negli appunti 
+                    let mut ctx2 = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
+                    let image = image::open("screenshot.png").expect("Problem ");
                     let bytes = image.as_bytes();
                     
-                   let img_data = ImageData {width: image.width() as usize, height: image.height() as usize, bytes: std::borrow::Cow::Borrowed(bytes)};
-                   ctx.set_image(img_data).expect("no show on clipboard"); //settare l'immagine come elemento copiato negli appunti                  
+                    let img_data = ImageData {width: image.width() as usize, height: image.height() as usize, bytes: std::borrow::Cow::Borrowed(bytes)};
+                    ctx2.set_image(img_data).expect("no show on clipboard"); //settare l'immagine come elemento copiato negli appunti                  
 
                     
                    match self.output_format {
-                    Enum::Png => write("screenshot.png", buffer.clone()).expect("problema con il salvataggio"),
-                    Enum::JPG => conversion_into_jpg(),
-                    Enum::GIF => conversion_into_gif(buffer),
-                }                
-             
-                
+                    Enum::Png => save_in_png(img),
+                    Enum::JPEG => save_in_jpeg(img),
+                    Enum::GIF => save_in_gif(img),
+                    }                
+               
                 }
             }
             
         });
     }
+}
   
+pub fn save_in_png(img: screenshots::Image){
+    let buffer=img.to_png(None).expect("Problem with the conversion in buffer");
+    write("screenshot.png", buffer).expect("Problem with the file saving");
+}
+pub fn save_in_jpeg (img: screenshots::Image){   //salvataggio in jpeg senza passare da png, usando Encoder fornito dal crate image
+    let file_output = File::create("screenshot.jpeg").expect("Problem with the creation of file JPEG");
+    let mut encoder = JpegEncoder::new(file_output);
+    encoder.encode(img.rgba(), img.width(), img.height(), image::ColorType::Rgba8).expect("Problem with the JPEG encoder"); 
 }
 
-pub fn conversion_into_jpg (){ //conversione in jpg passando per png (acquizione iniziale)
-    let image_path="screenshot.png";
-    let img2= image::open(image_path).unwrap();
-    img2.save_with_format("screenshot.jpg", image::ImageFormat::Jpeg).expect("impossibile convertire in jpg");
-}
-
-pub fn conversion_into_gif (mut buffer:Vec<u8>){ //gif non funziona ancora
-    let image_path="screenshot.png";
-    let img2=image::open(image_path).unwrap();
-    let frame = gif::Frame::from_rgb(img2.width() as u16,img2.height() as u16,&mut *buffer);
-    let image = File::create("screenshot.gif").unwrap();
-    let mut encoder = gif::Encoder::new(& image, frame.width, frame.height, &[]).unwrap();
-    encoder.write_frame(&frame).unwrap();
+pub fn save_in_gif (img: screenshots::Image){
+    let file_output = File::create("screenshot.gif").expect("Problem with the creation of file gif"); 
+    let mut encoder = GifEncoder::new(file_output);  
+   encoder.encode(img.rgba(), img.width() , img.height(), image::ColorType::Rgba8).expect("Problem with the GIF encoder");
 }
