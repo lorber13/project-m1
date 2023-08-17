@@ -38,12 +38,12 @@ fn main() {
 struct Content {
     output_format: Enum,
     area: Enum2,
+    bool_clipboard: bool
 }
 impl Default for Content{
     fn default() -> Self{
         Self { output_format: Enum::Png,
-        area: Enum2::Fullscreen,
-        }
+        area: Enum2::Fullscreen, bool_clipboard: false}
     }
 }
 
@@ -76,20 +76,20 @@ impl Default for Content{
                 });
                 ui.end_row();
             ui.separator();
-           
+            let checkbox_clipboard = ui.checkbox(&mut self.bool_clipboard, "Copy To Clipboard");
+            
             // gestione della pressione del pulsante "Acquire"
             if ui.button("Acquire").clicked(){
                 for screen in screens.iter(){
                     let img=screen.capture().expect("Problem with the acquisition of the screenshot image"); //acquisizione dello screenshot con formato screenshot::Image
                     
-                    //aggiungere checkbox per salvataggio negli appunti 
-                    let mut ctx2 = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
-                    let image = image::open("screenshot.png").expect("Problem ");
-                    let bytes = image.as_bytes();
-                    
-                    let img_data = ImageData {width: image.width() as usize, height: image.height() as usize, bytes: std::borrow::Cow::Borrowed(bytes)};
-                    ctx2.set_image(img_data).expect("no show on clipboard"); //settare l'immagine come elemento copiato negli appunti                  
-
+                    if self.bool_clipboard    //solo se la checkbox è stata selezionata, l'immagine viene copiata negli appunti 
+                    {
+                        let mut ctx2 = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
+                        let bytes = img.rgba();
+                        let img_data = ImageData {width: img.width() as usize, height: img.height() as usize, bytes: std::borrow::Cow::Borrowed(bytes)};
+                        ctx2.set_image(img_data).expect("no show on clipboard"); //settare l'immagine come elemento copiato negli appunti  
+                    }
                     
                    match self.output_format {
                     Enum::Png => save_in_png(img),
