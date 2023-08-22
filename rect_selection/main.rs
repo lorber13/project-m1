@@ -11,8 +11,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 const DEBUG: bool = true; //if true, it prints messages on console
-const DISPLAY_HEIGHT: f32 = 1080.0;
-const DISPLAY_WIDTH: f32 = 1919.0;
+
 pub enum ExitCode
 {
     ABORT = 1,
@@ -36,6 +35,8 @@ impl Into<i32> for ExitCode
 
 
 use eframe::egui;
+use eframe::egui::Window;
+use egui::Vec2;
 use crate::egui::Pos2;
 use crate::egui::Color32;
 use crate::egui::Rect;
@@ -55,15 +56,33 @@ fn rect_from_pos2(p1: &Pos2, p2: &Pos2) -> Rect
     Rect { min: left_top, max: right_bottom }
 }
 
+//funzione che fa partire un processo per ottenere le dimensioni dello schermo
+fn detect_screen_resolution() -> [f32; 2]
+{
+    let cmd_display_res = std::process::Command::new("display_resolution_detection")
+                                    .output()
+                                    .expect("Unable to detect current display resolution");
+    let str = String::from_utf8(cmd_display_res.stdout).unwrap();
+    let out :Vec<&str> = str.split(' ').collect();
+    [out[1].to_string().parse::<f32>().unwrap(), out[3].to_string().parse::<f32>().unwrap()]
+}
+
 
 fn main() -> Result<(), eframe::Error> {
+
+    let arr_size = detect_screen_resolution();
+
+    let DISPLAY_WIDTH: f32 = arr_size[0];
+    let DISPLAY_HEIGHT: f32 = arr_size[1]; 
 
     let options = eframe::NativeOptions {
         decorated : false,
         transparent: true,
         always_on_top : true,
+        min_window_size: Some(Vec2::new(DISPLAY_WIDTH, DISPLAY_HEIGHT)),
+        initial_window_pos: Some(Pos2::new(0.0, 0.0)),
         //fullscreen: true,     //NO! SI PERDE LA TRASPARENZA
-        maximized: true,
+        //maximized: true,
         ..Default::default()
     };
 
