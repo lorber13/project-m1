@@ -1,59 +1,63 @@
-use eframe::{NativeOptions, run_simple_native};
-use egui::{CentralPanel};
-use livesplit_hotkey::{Hook, Hotkey, KeyCode};
+use std::thread;
+use eframe::egui;
+use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
+use global_hotkey::hotkey::{Code, Modifiers};
 
-struct Modifiers {
-    ctrl: bool,
-    alt: bool,
-    shift: bool,
-    meta: bool
+fn main() -> Result<(), eframe::Error> {
+    let manager = GlobalHotKeyManager::new().unwrap();
+    let hotkey = HotKey::new(Some(Modifiers::SHIFT), Code::KeyD);
+
+    manager.register(hotkey).unwrap();
+
+    let options = eframe::NativeOptions {
+        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        ..Default::default()
+    };
+
+    // event loop, listening for the hotkeys
+    thread::spawn(|| {
+        loop {
+            if let Ok(event) = GlobalHotKeyEvent::receiver().recv() {
+                println!("tray event: {event:?}");
+            }
+        }
+    });
+
+    eframe::run_native(
+        "My egui App",
+        options,
+        Box::new(|_cc| Box::<MyApp>::default()),
+    )
 }
 
-fn main() -> eframe::Result<()> {
-    let native_options = NativeOptions::default();
+struct MyApp {
+    name: String,
+    age: u32,
+}
 
-    let mut modifiers = Modifiers {
-        ctrl: false,
-        alt: false,
-        shift: false,
-        meta: false
-    };
-    let mut hotkey = Hotkey::from(KeyCode::Digit0);
-    let hook = Hook::new().unwrap();
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            name: "Arthur".to_owned(),
+            age: 42,
+        }
+    }
+}
 
-    run_simple_native("Hotkeys Prototype", native_options, move |ctx, _frame| {
-        CentralPanel::default().show(ctx, |ui| {
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit0, KeyCode::Digit0.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit1, KeyCode::Digit1.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit2, KeyCode::Digit2.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit3, KeyCode::Digit3.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit4, KeyCode::Digit4.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit5, KeyCode::Digit5.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit6, KeyCode::Digit6.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit7, KeyCode::Digit7.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit8, KeyCode::Digit8.name());
-            ui.radio_value(&mut hotkey.key_code, KeyCode::Digit9, KeyCode::Digit9.name());
-            ui.checkbox(&mut modifiers.alt, "alt");
-            ui.checkbox(&mut modifiers.ctrl, "ctrl");
-            ui.checkbox(&mut modifiers.shift, "shift");
-            ui.checkbox(&mut modifiers.meta, "meta");
-            if ui.button("set").clicked() {
-                if modifiers.alt {
-                    hotkey.modifiers.insert(livesplit_hotkey::Modifiers::ALT);
-                }
-                if modifiers.ctrl {
-                    hotkey.modifiers.insert(livesplit_hotkey::Modifiers::CONTROL);
-                }
-                if modifiers.meta {
-                    hotkey.modifiers.insert(livesplit_hotkey::Modifiers::META);
-                }
-                if modifiers.shift {
-                    hotkey.modifiers.insert(livesplit_hotkey::Modifiers::SHIFT);
-                }
-                hook.register(hotkey, move || {
-                    println!("got HotKey {}", hotkey);
-                }).expect("TODO: panic message");
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("My egui Application");
+            ui.horizontal(|ui| {
+                let name_label = ui.label("Your name: ");
+                ui.text_edit_singleline(&mut self.name)
+                    .labelled_by(name_label.id);
+            });
+            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
+            if ui.button("Click each year").clicked() {
+                self.age += 1;
             }
+            ui.label(format!("Hello '{}', age {}", self.name, self.age));
         });
-    })
+    }
 }
