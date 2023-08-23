@@ -3,6 +3,7 @@
 mod output_format;
 
 use eframe::egui;
+use output_format::ScreenshotDim;
 use std::fs::write;
 use screenshots::Screen;
 extern crate image;
@@ -70,19 +71,16 @@ impl Default for Content{
                 
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
-                    for screen in screens.iter(){
-                        let img=screen.capture().expect("Problem with the acquisition of the screenshot image"); //acquisizione dello screenshot con formato screenshot::Image
-                        
-                        if self.bool_clipboard    //solo se la checkbox è stata selezionata, l'immagine viene copiata negli appunti 
-                        {
-                            output_format::copy_to_clipboard(&img);
-                        }
-                        
-                    match self.output_format {
-                        output_format::ImageFormat::Png => output_format::save_in_png(img),
-                        output_format::ImageFormat::JPEG => output_format::save_in_jpeg(img),
-                        output_format::ImageFormat::GIF => output_format::save_in_gif(img),
-                        }                
+                    //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area
+                    if self.area == ScreenshotDim::Rectangle
+                    {
+                        let out = std::process::Command::new(".\\rect_selection\\target\\debug\\rect_selection")
+                                                                    .output().unwrap();
+                        let rect = serde_json::from_str(out.stdout);
+                    }
+
+
+                    //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot               
                
                 }
             }

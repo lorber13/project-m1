@@ -10,7 +10,7 @@
 */
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-const DEBUG: bool = true; //if true, it prints messages on console
+const DEBUG: bool = false; //if true, it prints messages on console
 
 pub enum ExitCode
 {
@@ -29,6 +29,25 @@ impl Into<i32> for ExitCode
             ExitCode::ERROR => -1,
             ExitCode::SELECTED => 0
         }
+    }
+}
+
+//struct che descrive le caratteristiche del rettangolo selezionato
+//verrà serializzata per essere ritornata al processo padre
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcessOutput
+{
+    x_top: u32,
+    y_top: u32,
+    width: u32,
+    height: u32
+}
+
+impl From<Rect> for ProcessOutput
+{
+    fn from(r: Rect) -> Self
+    {
+        Self{x_top: r.left(), y_top: r.top(), width: r.width(), height: r.height()}
     }
 }
 
@@ -113,9 +132,12 @@ fn main() -> Result<(), eframe::Error> {
                 {
                     match state
                     {
-                        [Some(_), Some(_)] => 
+                        [Some(p1), Some(p2)] => 
                         {
-                            //TODO: codice per restituire le coordinate del rettangolo selezionato al processo padre
+                            let re: Rect = rect_from_pos2(p1, p2);
+                            let out = ProcessOutput::from(re);
+                            let str_out = serde_json::to_string(&out).unwrap();
+                            println!("{}", str_out);
                             if DEBUG { println!("state = {:?}", state); }
                             std::process::exit(ExitCode::SELECTED.into())
                         },
