@@ -59,7 +59,15 @@ fn rect_from_pos2(p1: &Pos2, p2: &Pos2) -> Rect
 //funzione che fa partire un processo per ottenere le dimensioni dello schermo
 fn detect_screen_resolution() -> [f32; 2]
 {
-    let cmd_display_res = std::process::Command::new("display_resolution_detection")
+    //compilo il programma (la compilazione deve essere fatta sulla macchina target per mantenere il codice cross platform)
+    let cmd = std::process::Command::new("cargo")
+                                    .arg("build")
+                                    .current_dir("..\\display_resolution_detection")
+                                    .output()
+                                    .expect("Failed to compile display_resolution_detection");
+
+    //eseguo il programma appena compilato
+    let cmd_display_res = std::process::Command::new("../display_resolution_detection/target/debug/display_resolution_detection")
                                     .output()
                                     .expect("Unable to detect current display resolution");
     let str = String::from_utf8(cmd_display_res.stdout).unwrap();

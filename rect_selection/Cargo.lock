@@ -1724,7 +1724,9 @@ name = "prova_frame_fullscreen"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "egui-winit",
  "env_logger",
+ "winit",
 ]
 
 [[package]]
