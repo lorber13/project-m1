@@ -32,6 +32,25 @@ impl Into<i32> for ExitCode
     }
 }
 
+//struct che descrive le caratteristiche del rettangolo selezionato
+//verrà serializzata per essere ritornata al processo padre
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcessOutput
+{
+    x_top: u32,
+    y_top: u32,
+    width: u32,
+    height: u32
+}
+
+impl From<Rect> for ProcessOutput
+{
+    fn from(r: Rect) -> Self
+    {
+        Self{x_top: r.left(), y_top: r.top(), width: r.width(), height: r.height()}
+    }
+}
+
 
 
 use eframe::egui;
@@ -119,9 +138,12 @@ fn main() -> Result<(), eframe::Error> {
                 {
                     match state
                     {
-                        [Some(_), Some(_)] => 
+                        [Some(p1), Some(p2)] => 
                         {
-                            //TODO: codice per restituire le coordinate del rettangolo selezionato al processo padre
+                            let re: Rect = rect_from_pos2(p1, p2);
+                            let out = ProcessOutput::from(re);
+                            let str_out = serde_json::to_string(&out).unwrap();
+                            println!("{}", str_out);  
                             if DEBUG { println!("state = {:?}", state); }
                             std::process::exit(ExitCode::SELECTED.into())
                         },
