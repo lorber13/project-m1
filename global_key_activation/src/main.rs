@@ -1,7 +1,7 @@
 use std::{env, thread};
 use eframe::egui;
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
-use global_hotkey::hotkey::{Code, Modifiers};
+use global_hotkey::hotkey::{Code, Modifiers, self};
 
 
 fn main() -> Result<(), eframe::Error> {
@@ -33,18 +33,47 @@ fn main() -> Result<(), eframe::Error> {
     }
 }
 struct WaylandContent {
+    hook: livesplit_hotkey::Hook,
+    hotkey: livesplit_hotkey::Hotkey,
+    keycode: livesplit_hotkey::KeyCode
 }
 
 impl WaylandContent {
     fn new() -> Self {
-        todo!()
+        let hook = livesplit_hotkey::Hook::new().unwrap();
+        let keycode = livesplit_hotkey::KeyCode::Digit0;
+        let hotkey = livesplit_hotkey::Hotkey::from(keycode);
+        hook.register(hotkey, || {
+            println!("hotkey");
+        }).unwrap();
+        WaylandContent {
+            hook,
+            hotkey,
+            keycode
+        }
     }
 }
 
 impl eframe::App for WaylandContent {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            todo!()
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit0, livesplit_hotkey::KeyCode::Digit0.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit1, livesplit_hotkey::KeyCode::Digit1.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit2, livesplit_hotkey::KeyCode::Digit2.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit3, livesplit_hotkey::KeyCode::Digit3.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit4, livesplit_hotkey::KeyCode::Digit4.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit5, livesplit_hotkey::KeyCode::Digit5.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit6, livesplit_hotkey::KeyCode::Digit6.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit7, livesplit_hotkey::KeyCode::Digit7.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit8, livesplit_hotkey::KeyCode::Digit8.name());
+            ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit9, livesplit_hotkey::KeyCode::Digit9.name());
+            if ui.button("set").clicked() {
+                self.hook.unregister(self.hotkey).unwrap();
+                self.hotkey = livesplit_hotkey::Hotkey::from(self.keycode);
+                self.hook.register(self.hotkey, || {
+                    println!("hotkey");
+                }).expect("msg");
+            }
         });
     }
 }
