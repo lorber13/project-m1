@@ -1,5 +1,6 @@
 use std::{env, thread};
 use eframe::egui;
+use egui::Key;
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
 use global_hotkey::hotkey::{Code, Modifiers, self};
 
@@ -35,7 +36,8 @@ fn main() -> Result<(), eframe::Error> {
 struct WaylandContent {
     hook: livesplit_hotkey::Hook,
     hotkey: livesplit_hotkey::Hotkey,
-    keycode: livesplit_hotkey::KeyCode
+    keycode: livesplit_hotkey::KeyCode,
+    egui_key: egui::Key
 }
 
 impl WaylandContent {
@@ -49,7 +51,8 @@ impl WaylandContent {
         WaylandContent {
             hook,
             hotkey,
-            keycode
+            keycode,
+            egui_key: egui::Key::Num0
         }
     }
 }
@@ -68,11 +71,27 @@ impl eframe::App for WaylandContent {
             ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit8, livesplit_hotkey::KeyCode::Digit8.name());
             ui.radio_value(&mut self.keycode, livesplit_hotkey::KeyCode::Digit9, livesplit_hotkey::KeyCode::Digit9.name());
             if ui.button("set").clicked() {
+                self.egui_key = match self.keycode {
+                    livesplit_hotkey::KeyCode::Digit0 => Key::Num0,
+                    livesplit_hotkey::KeyCode::Digit1 => Key::Num1,
+                    livesplit_hotkey::KeyCode::Digit2 => Key::Num2,
+                    livesplit_hotkey::KeyCode::Digit3 => Key::Num3,
+                    livesplit_hotkey::KeyCode::Digit4 => Key::Num4,
+                    livesplit_hotkey::KeyCode::Digit5 => Key::Num5,
+                    livesplit_hotkey::KeyCode::Digit6 => Key::Num6,
+                    livesplit_hotkey::KeyCode::Digit7 => Key::Num7,
+                    livesplit_hotkey::KeyCode::Digit8 => Key::Num8,
+                    livesplit_hotkey::KeyCode::Digit9 => Key::Num9,
+                    _ => panic!()
+                };
                 self.hook.unregister(self.hotkey).unwrap();
                 self.hotkey = livesplit_hotkey::Hotkey::from(self.keycode);
                 self.hook.register(self.hotkey, || {
                     println!("hotkey");
                 }).expect("msg");
+            }
+            if ui.input(|i| i.key_pressed(self.egui_key)) {
+                println!("Hotkey");
             }
         });
     }
