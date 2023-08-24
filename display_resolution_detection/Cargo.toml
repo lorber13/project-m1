@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 egui = "0.22.0"
 egui-winit = "0.22.0"
+resolution = "0.1.1"
 winit = "0.28.6"
