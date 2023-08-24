@@ -32,6 +32,8 @@ impl Into<i32> for ExitCode
     }
 }
 
+use serde::{Serialize, Deserialize};
+
 //struct che descrive le caratteristiche del rettangolo selezionato
 //verrà serializzata per essere ritornata al processo padre
 #[derive(Serialize, Deserialize, Debug)]
@@ -47,10 +49,9 @@ impl From<Rect> for ProcessOutput
 {
     fn from(r: Rect) -> Self
     {
-        Self{x_top: r.left(), y_top: r.top(), width: r.width(), height: r.height()}
+        Self{x_top: r.left().round() as u32, y_top: r.top().round() as u32, width: r.width().round() as u32, height: r.height().round() as u32}
     }
 }
-
 
 
 use eframe::egui;
