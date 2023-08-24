@@ -140,7 +140,7 @@ fn main() -> Result<(), eframe::Error> {
                     {
                         [Some(p1), Some(p2)] => 
                         {
-                            let re: Rect = rect_from_pos2(p1, p2);
+                            let re: Rect = rect_from_pos2(&p1, &p2);
                             let out = ProcessOutput::from(re);
                             let str_out = serde_json::to_string(&out).unwrap();
                             println!("{}", str_out);  
