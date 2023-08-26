@@ -45,33 +45,38 @@ impl eframe::App for MyApp {
                     Color32::from_white_alpha(30),
                 );
 
-                match (space.drag_started(), space.drag_released()) {
-                    (true, false) => {
-                        self.start_drag_point = space.hover_pos().map(|point| point.round());
-                    }
-                    (false, true) => {
-                        println!("salvo lo screenshot ritagliato");
-                        self.capturing = false;
-                        self.start_drag_point = None;
-                        frame.set_fullscreen(false);
-                    }
-                    (false, false) => {
-                        if let Some(pos1) = self.start_drag_point {
-                            painter.rect(
-                                Rect::from_points(&[
-                                    pos1,
-                                    space
-                                        .hover_pos()
-                                        .map(|point| point.round())
-                                        .expect("errore"),
-                                ]),
-                                Rounding::none(),
-                                Color32::from_white_alpha(30),
-                                Stroke::NONE,
-                            )
+                if !space.clicked() {
+                    match (space.drag_started(), space.drag_released()) {
+                        (true, false) => {
+                            self.start_drag_point = space.hover_pos().map(|point| point.round());
                         }
+                        (false, true) => {
+                            println!("salvo lo screenshot ritagliato");
+                            self.capturing = false;
+                            self.start_drag_point = None;
+                            frame.set_fullscreen(false);
+                        }
+                        (false, false) => {
+                            if let Some(pos1) = self.start_drag_point {
+                                painter.rect(
+                                    Rect::from_points(&[
+                                        pos1,
+                                        space
+                                            .hover_pos()
+                                            .map(|point| point.round())
+                                            .expect("errore"),
+                                    ]),
+                                    Rounding::none(),
+                                    Color32::from_white_alpha(30),
+                                    Stroke::NONE,
+                                )
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
+                } else {
+                    // line put to prevent a strange bug in case of a click todo: investigate
+                    self.start_drag_point = None;
                 }
             });
         } else {
