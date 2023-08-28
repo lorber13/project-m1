@@ -1,22 +1,16 @@
 [package]
-name = "output_format"
+name = "project-m1"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = "0.22.0"
-env_logger = "0.10"
-features = "0.10.0"
-image = "0.24.6"
-screenshots = "0.7.0"
-clipboard = "0.5.0"
 arboard = "3.2.0"
-gif = "0.12.0"
-serde = "1.0.185"
+eframe = "0.22.0"
+egui_extras = "0.22.0"
+image = "0.24.7"
+serde = { version = "1.0.186", features = ["derive"] }
 serde_json = "1.0.105"
-
-[[bin]]
-name = "output_format"
-path = "main.rs"
+screenshots = "0.8.2"
+clipboard = "0.5.0"
