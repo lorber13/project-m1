@@ -116,6 +116,6 @@ pub fn save_in_jpeg (img: screenshots::Image){   //salvataggio in jpeg senza pas
 
 pub fn save_in_gif (img: screenshots::Image){
     let file_output = File::create("screenshot.gif").expect("Problem with the creation of file gif"); 
-    let mut encoder = GifEncoder::new(file_output);  
+    let mut encoder = GifEncoder::new_with_speed(file_output, 30);
    encoder.encode(img.rgba(), img.width() , img.height(), image::ColorType::Rgba8).expect("Problem with the GIF encoder");
 }
