@@ -1,39 +1,43 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod output_format;
 
 use eframe::egui;
-use super::super::*;
-use super::rect_selection::RectSelection;
+use output_format::ScreenshotDim;
+use std::fs::write;
 use screenshots::Screen;
 extern crate image;
-use super::EnumGuiState;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 
 
 
-
-pub struct MainWindow {
-    output_format: image_coding::ImageFormat,
-    area: image_coding::ScreenshotDim,
-    bool_clipboard: bool,
-    global_gui_state: Rc<RefCell<EnumGuiState>>
+fn main() {  
+    let options = eframe::NativeOptions::default();
+    
+    eframe::run_native(
+        "Simple screenshot App", 
+        options,  
+        Box::new(|_cc| Box::<Content>::default())
+    ).unwrap();
 }
-impl MainWindow{
-    pub fn new(global_gui_state: Rc<RefCell<EnumGuiState>>) -> Self{
-        Self { output_format: image_coding::ImageFormat::Png,
-        area: image_coding::ScreenshotDim::Fullscreen, bool_clipboard: false,
-        global_gui_state}
+
+struct Content {
+    output_format: output_format::ImageFormat,
+    area: output_format::ScreenshotDim,
+    bool_clipboard: bool
+}
+impl Default for Content{
+    fn default() -> Self{
+        Self { output_format: output_format::ImageFormat::Png,
+        area: output_format::ScreenshotDim::Fullscreen, bool_clipboard: false}
     }
 }
 
 
- impl eframe::App for MainWindow{
+ impl eframe::App for Content{
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
-        _frame.set_fullscreen(false);
-        _frame.set_maximized(false);
         let screens= Screen::all().expect("Mismatching type in Vec<Screen>");
 
            egui::CentralPanel::default().show(ctx, |ui|
@@ -45,8 +49,8 @@ impl MainWindow{
                     .show_ui(ui, |ui|{
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.area, image_coding::ScreenshotDim::Fullscreen, "Full Screen");
-                        ui.selectable_value(&mut self.area, image_coding::ScreenshotDim::Rectangle, "Rectangle");
+                        ui.selectable_value(&mut self.area, output_format::ScreenshotDim::Fullscreen, "Full Screen");
+                        ui.selectable_value(&mut self.area, output_format::ScreenshotDim::Rectangle, "Rectangle");
                     });
                     ui.end_row();
                     ui.separator();
@@ -56,9 +60,9 @@ impl MainWindow{
                     .show_ui(ui, |ui|{
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::Png, "Png");
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::JPEG, "JPEG");
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::GIF, "GIF");
+                        ui.selectable_value(&mut self.output_format, output_format::ImageFormat::Png, "Png");
+                        ui.selectable_value(&mut self.output_format, output_format::ImageFormat::JPEG, "JPEG");
+                        ui.selectable_value(&mut self.output_format, output_format::ImageFormat::GIF, "GIF");
                     });
                     ui.end_row();
                 ui.separator();
@@ -68,19 +72,20 @@ impl MainWindow{
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area
-                    if self.area == image_coding::ScreenshotDim::Rectangle
+                    if self.area == ScreenshotDim::Rectangle
                     {
-                        _frame.set_visible(false);
-                        let rs = RectSelection::new(self.global_gui_state.clone());
-                        self.global_gui_state.replace(EnumGuiState::ShowingRectSelection(Rc::new(RefCell::new(rs))));
+                        let out = std::process::Command::new(".\\rect_selection\\target\\debug\\rect_selection")
+                                                                    .output().unwrap();
+                        let rect = serde_json::from_str(out.stdout);
                     }
 
 
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot               
                
                 }
-            });
+            }
             
+        });
     }
 }
   
