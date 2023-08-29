@@ -1,29 +1,29 @@
 use eframe::egui;
-use egui::{pos2, CentralPanel, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
+use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2, CentralPanel, Key};
 use egui_extras::RetainedImage;
 use screenshots::Screen;
-use super::GlobalGuiState;
-use std::rc::Rc;
+use super::{EnumGuiState, main_window::MainWindow};
+use std::{rc::Rc, cell::RefCell};
 
 pub struct RectSelection {
-    capturing: bool,
     image: RetainedImage,
     start_drag_point: Option<Pos2>,
+    global_gui_state: Rc<RefCell<EnumGuiState>>
 }
 
 impl RectSelection {
-    pub fn new(global_gui_state: Rc<GlobalGuiState>) -> Self {
+    pub fn new(global_gui_state: Rc<RefCell<EnumGuiState>>) -> Self {
         Self {
-            capturing: false,
-            image: RetainedImage::from_color_image("todo", ColorImage::default()),
+            image:  capture_screenshot(),
             start_drag_point: None,
+            global_gui_state
         }
     }
 }
 
 impl eframe::App for RectSelection {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.capturing {
+            frame.set_fullscreen(true);
             egui::Area::new("area_1").show(ctx, |ui| {
                 let (space, painter) = ui.allocate_painter(
                     Vec2::new(ctx.screen_rect().width(), ctx.screen_rect().height()),
@@ -46,9 +46,7 @@ impl eframe::App for RectSelection {
                         }
                         (false, true) => {
                             println!("Screenshot has to be saved");
-                            self.capturing = false;
-                            self.start_drag_point = None;
-                            frame.set_fullscreen(false);
+                            self.global_gui_state.replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(MainWindow::new(self.global_gui_state.clone())))));
                         }
                         (false, false) => {
                             if let Some(pos1) = self.start_drag_point {
@@ -72,17 +70,9 @@ impl eframe::App for RectSelection {
                     // line put to prevent a strange bug in case of a click todo: investigate
                     self.start_drag_point = None;
                 }
+
+                frame.set_visible(true);
             });
-        } else {
-            CentralPanel::default().show(ctx, |ui| {
-                ui.label("The ENTER key is not needed anymore to save the acquisition");
-                if ui.button("capture").clicked() {
-                    self.capturing = true;
-                    self.image = capture_screenshot();
-                    frame.set_fullscreen(true);
-                }
-            });
-        }
     }
 }
 
