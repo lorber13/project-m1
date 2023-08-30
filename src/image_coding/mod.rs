@@ -52,7 +52,7 @@ pub fn save_image(file_output: &std::path::Path, img: RgbaImage) -> image::Image
 {
     if let Some(ext) = file_output.extension()
     {
-        if ImageFormat::available_formats().contains(ext)
+        if ImageFormat::available_formats().contains(&ext.to_str().unwrap())
         {
             return img.save(file_output);
         }
