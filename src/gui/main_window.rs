@@ -1,13 +1,13 @@
 
 
 use eframe::egui;
-use super::super::*;
-use super::rect_selection::RectSelection;
+use super::{super::*, GlobalGuiState};
 use screenshots::Screen;
 extern crate image;
 use super::EnumGuiState;
 use std::rc::Rc;
 use std::cell::RefCell;
+use super::super::itc::ScreenshotDim;
 
 
 
@@ -15,14 +15,14 @@ use std::cell::RefCell;
 
 pub struct MainWindow {
     output_format: image_coding::ImageFormat,
-    area: image_coding::ScreenshotDim,
+    area: ScreenshotDim,
     bool_clipboard: bool,
-    global_gui_state: Rc<RefCell<EnumGuiState>>
+    global_gui_state: Rc<GlobalGuiState>
 }
 impl MainWindow{
-    pub fn new(global_gui_state: Rc<RefCell<EnumGuiState>>) -> Self{
+    pub fn new(global_gui_state: Rc<GlobalGuiState>) -> Self{
         Self { output_format: image_coding::ImageFormat::Png,
-        area: image_coding::ScreenshotDim::Fullscreen, bool_clipboard: false,
+        area: ScreenshotDim::Fullscreen, bool_clipboard: false,
         global_gui_state}
     }
 }
@@ -45,8 +45,8 @@ impl MainWindow{
                     .show_ui(ui, |ui|{
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.area, image_coding::ScreenshotDim::Fullscreen, "Full Screen");
-                        ui.selectable_value(&mut self.area, image_coding::ScreenshotDim::Rectangle, "Rectangle");
+                        ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
+                        ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                     });
                     ui.end_row();
                     ui.separator();
@@ -68,12 +68,9 @@ impl MainWindow{
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area
-                    if self.area == image_coding::ScreenshotDim::Rectangle
-                    {
-                        _frame.set_visible(false);
-                        let rs = RectSelection::new(self.global_gui_state.clone());
-                        self.global_gui_state.replace(EnumGuiState::ShowingRectSelection(Rc::new(RefCell::new(rs))));
-                    }
+                    _frame.set_visible(false);
+                    //chiedere al thread principale di avviare la selezione del rettangolo 
+                    self.global_gui_state.send_acquire_signal(self.area);
 
 
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot               

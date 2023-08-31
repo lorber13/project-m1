@@ -1,12 +1,29 @@
+/*
+La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
+Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
+mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState (inclusa None).
+Il modulo offre un'interfaccia piu' esterna (Gui, che è un façade) che offre i metodi per passare da
+una finestra all'altra.
+Il  modulo memorizza internamente (nella classe GlobalGuiState) un Sender<SignalToHeadThread> per inviare
+segnali al thread che implementa la logica applicativa. E' infatti lo stesso thread che può richiamare
+le funzioni pubbliche di Gui per modificare ciò che si vede. 
+ */
+
+
 mod main_window;
 mod rect_selection;
 
 use eframe::egui;
+use eframe::epaint::Pos2;
+use eframe::epaint::Rect;
 use std::cell::RefCell;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
 use std::rc::Rc;
-use std::cell::RefMut;
+use std::sync::Arc;
+use std::sync::mpsc::*;
+
+use crate::itc::ScreenshotDim;
 
 pub enum EnumGuiState
 {
@@ -28,16 +45,17 @@ impl Clone for EnumGuiState
     }
 }
 
-struct GlobalGuiState
+pub struct GlobalGuiState
 {
-    state: Rc<RefCell<EnumGuiState>>
+    state: Rc<RefCell<EnumGuiState>>,
+    head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>
 }
 
 impl Clone for GlobalGuiState
 {
     fn clone(&self) -> Self
     {
-        Self{state: self.state.clone()}
+        Self{state: self.state.clone(), head_thread_tx: self.head_thread_tx.clone()}
     }
 }
 
@@ -45,45 +63,87 @@ impl Clone for GlobalGuiState
 
 impl GlobalGuiState
 {
-    pub fn new() -> Self
+    fn new(head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>) -> Rc<Self>
     {
-        let ret = Self{state: Rc::new(RefCell::new(EnumGuiState::None))};
-        let mw = MainWindow::new(ret.state.clone());
-        ret.state.replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(mw))));
+        let ret = Rc::new(Self{state: Rc::new(RefCell::new(EnumGuiState::None)), head_thread_tx});
+        ret.switch_to_main_window();
         ret
     }
 
-    /*
-    pub fn switch_to_main_window(self: Rc<Self>)
+    fn switch_to_main_window(self: Rc<Self>)
     {
-        let mw = MainWindow::new(self.clone());
-        self.state.replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(mw))));
+        let rs = MainWindow::new(self.clone());
+        self.state.replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(rs))));
     }
 
-    pub fn switch_to_rect_selection(self: Rc<Self>)
+    fn switch_to_rect_selection(self: Rc<Self>)
     {
         let rs = RectSelection::new(self.clone());
         self.state.replace(EnumGuiState::ShowingRectSelection(Rc::new(RefCell::new(rs))));
     }
-    */
+
+    fn switch_to_none(self: Rc<Self>)
+    {
+        self.state.replace(EnumGuiState::None);
+    }
+
+    fn send_acquire_signal(self: Rc<Self>, sd: ScreenshotDim)
+    {
+        self.head_thread_tx.send(crate::itc::SignalToHeadThread::AcquirePressed(sd));
+    }
+
+    fn send_rect_selected(self: Rc<Self>, rect: Rect)
+    {
+        self.head_thread_tx.send(crate::itc::SignalToHeadThread::RectSelected(rect));
+    }
+
+    
+}
+
+struct Gui //wrapper e interfaccia verso l'esterno
+{
+    ggstate: Rc<GlobalGuiState>
+}
+
+impl Gui
+{
+    fn new(head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>) -> Self
+    {
+        Self{ggstate: GlobalGuiState::new(head_thread_tx)}
+    }
+
+    pub fn switch_to_main_window(&self)
+    {
+        self.ggstate.switch_to_main_window();
+    }
+
+    pub fn switch_to_rect_selection(&self)
+    {
+        self.ggstate.switch_to_rect_selection();
+    }
+
+    pub fn show_nothing(&self)
+    {
+        self.ggstate.switch_to_none();
+    }
 }
 
 
-pub fn launch_main_window() {  
+pub fn launch_gui(head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>) {  
     let options = eframe::NativeOptions::default();
     
     eframe::run_native(
         "Simple screenshot App", 
         options,  
-        Box::new(|_cc| { return Box::new(GlobalGuiState::new()); })
+        Box::new(|_cc| { return Box::new(Gui::new(head_thread_tx)); })
     ).unwrap();
 }
 
-impl eframe::App for GlobalGuiState
+impl eframe::App for Gui
 {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) 
     {
-        let temp = self.state.borrow().clone();
+        let temp = self.ggstate.state.borrow().clone();
 
         match temp
         {

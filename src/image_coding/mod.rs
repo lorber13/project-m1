@@ -1,7 +1,5 @@
-use image::{RgbaImage, ImageEncoder, ImageError};
+
 use arboard::{Clipboard, ImageData};
-use image::codecs::{jpeg::JpegEncoder, gif::GifEncoder};
-use std::fs::*;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -30,13 +28,6 @@ impl ImageFormat
 {
     vec![ImageFormat::Png.into(), ImageFormat::JPEG.into(), ImageFormat::GIF.into()]
 } 
-}
-
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum ScreenshotDim{ //Enum per la scelta del tipo di screenshot
-    Fullscreen,
-    Rectangle,
 }
 
 pub fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>

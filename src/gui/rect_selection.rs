@@ -1,3 +1,5 @@
+use crate::gui::GlobalGuiState;
+
 use super::{main_window::MainWindow, EnumGuiState};
 use eframe::egui;
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
@@ -8,11 +10,11 @@ use std::{cell::RefCell, rc::Rc};
 pub struct RectSelection {
     image: RetainedImage,
     start_drag_point: Option<Pos2>,
-    global_gui_state: Rc<RefCell<EnumGuiState>>,
+    global_gui_state: Rc<GlobalGuiState>,
 }
 
 impl RectSelection {
-    pub fn new(global_gui_state: Rc<RefCell<EnumGuiState>>) -> Self {
+    pub fn new(global_gui_state: Rc<GlobalGuiState>) -> Self {
         Self {
             image: capture_screenshot(),
             start_drag_point: None,
@@ -45,11 +47,10 @@ impl eframe::App for RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        println!("Screenshot has to be saved");
-                        self.global_gui_state
-                            .replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(
-                                MainWindow::new(self.global_gui_state.clone()),
-                            ))));
+                        self.global_gui_state.send_rect_selected(Rect::from_points(&[
+                                                                    pos1,
+                                                                    space.hover_pos().map(|point| point.round()).expect("error"),
+                                                                ])); 
                     }
                     (false, false) => {
                         if let Some(pos1) = self.start_drag_point {
