@@ -12,11 +12,14 @@ le funzioni pubbliche di Gui per modificare ciò che si vede.
 
 mod main_window;
 mod rect_selection;
+mod error_alert;
 
 use eframe::egui;
-use eframe::epaint::Pos2;
 use eframe::epaint::Rect;
+use std::cell::Cell;
 use std::cell::RefCell;
+use std::io::Write;
+use std::io::stderr;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
 use std::rc::Rc;
@@ -48,14 +51,15 @@ impl Clone for EnumGuiState
 pub struct GlobalGuiState
 {
     state: Rc<RefCell<EnumGuiState>>,
-    head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>
+    head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>,
+    show_alert: Rc<Cell<Option<&'static str>>>
 }
 
 impl Clone for GlobalGuiState
 {
     fn clone(&self) -> Self
     {
-        Self{state: self.state.clone(), head_thread_tx: self.head_thread_tx.clone()}
+        Self{state: self.state.clone(), head_thread_tx: self.head_thread_tx.clone(), show_alert: self.show_alert.clone()}
     }
 }
 
@@ -65,36 +69,52 @@ impl GlobalGuiState
 {
     fn new(head_thread_tx: Arc<Sender<super::itc::SignalToHeadThread>>) -> Rc<Self>
     {
-        let ret = Rc::new(Self{state: Rc::new(RefCell::new(EnumGuiState::None)), head_thread_tx});
+        let ret = Rc::new(Self{state: Rc::new(RefCell::new(EnumGuiState::None)), head_thread_tx, show_alert: Rc::new(Cell::new(None))});
         ret.switch_to_main_window();
         ret
     }
 
-    fn switch_to_main_window(self: Rc<Self>)
+    fn switch_to_main_window(self: &Rc<Self>)
     {
         let rs = MainWindow::new(self.clone());
         self.state.replace(EnumGuiState::ShowingMainWindow(Rc::new(RefCell::new(rs))));
     }
 
-    fn switch_to_rect_selection(self: Rc<Self>)
+    fn switch_to_rect_selection(self: &Rc<Self>)
     {
         let rs = RectSelection::new(self.clone());
         self.state.replace(EnumGuiState::ShowingRectSelection(Rc::new(RefCell::new(rs))));
     }
 
-    fn switch_to_none(self: Rc<Self>)
+    fn switch_to_none(self: &Rc<Self>)
     {
         self.state.replace(EnumGuiState::None);
     }
 
-    fn send_acquire_signal(self: Rc<Self>, sd: ScreenshotDim)
+    fn send_acquire_signal(self: &Rc<Self>, sd: ScreenshotDim)
     {
-        self.head_thread_tx.send(crate::itc::SignalToHeadThread::AcquirePressed(sd));
+        match self.head_thread_tx.send(crate::itc::SignalToHeadThread::AcquirePressed(sd))
+        {
+            Ok(_) =>(),
+            Err(e) =>
+            {
+                self.show_alert.set(Some("Impossible to acquire.\nService not available.\nPlease restart the program."));
+                writeln!(stderr(), "{}", e);  
+            }
+        }
     }
 
-    fn send_rect_selected(self: Rc<Self>, rect: Rect)
+    fn send_rect_selected(self: &Rc<Self>, rect: Rect)
     {
-        self.head_thread_tx.send(crate::itc::SignalToHeadThread::RectSelected(rect));
+        match self.head_thread_tx.send(crate::itc::SignalToHeadThread::RectSelected(rect))
+        {
+            Ok(_) =>(),
+            Err(e) =>
+            {
+                self.show_alert.set(Some("Impossible to send coordinates of rect.\nService not available.\nPlease restart the program."));
+                writeln!(stderr(), "{}", e);  
+            }
+        }
     }
 
     
@@ -151,5 +171,8 @@ impl eframe::App for Gui
             EnumGuiState::ShowingRectSelection(rs) => rs.borrow_mut().update(ctx, frame),
             EnumGuiState::None => ()
         }
+
+        error_alert::show_error_alert(ctx, self.ggstate.show_alert.clone());
+
     }
 }

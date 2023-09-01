@@ -1,5 +1,6 @@
 
 use arboard::{Clipboard, ImageData};
+use image::{RgbaImage, ImageError};
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

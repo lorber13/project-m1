@@ -4,10 +4,8 @@ use eframe::egui;
 use super::{super::*, GlobalGuiState};
 use screenshots::Screen;
 extern crate image;
-use super::EnumGuiState;
-use std::rc::Rc;
-use std::cell::RefCell;
 use super::super::itc::ScreenshotDim;
+use std::rc::Rc;
 
 
 
@@ -67,13 +65,10 @@ impl MainWindow{
                 
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
-                    //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area
-                    _frame.set_visible(false);
-                    //chiedere al thread principale di avviare la selezione del rettangolo 
-                    self.global_gui_state.send_acquire_signal(self.area);
-
-
-                    //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot               
+                    //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
+                    //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
+                    self.global_gui_state.send_acquire_signal(self.area.clone());
+               
                
                 }
             });

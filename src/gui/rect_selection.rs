@@ -1,11 +1,10 @@
 use crate::gui::GlobalGuiState;
 
-use super::{main_window::MainWindow, EnumGuiState};
 use eframe::egui;
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 use egui_extras::RetainedImage;
 use screenshots::Screen;
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 pub struct RectSelection {
     image: RetainedImage,
@@ -47,8 +46,8 @@ impl eframe::App for RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        self.global_gui_state.send_rect_selected(Rect::from_points(&[
-                                                                    pos1,
+                        self.global_gui_state.clone().send_rect_selected(Rect::from_points(&[
+                                                                    self.start_drag_point.unwrap(),
                                                                     space.hover_pos().map(|point| point.round()).expect("error"),
                                                                 ])); 
                     }

@@ -8,6 +8,7 @@ use std::sync::Arc;
 fn main()
 {
     let (tx, rx) = channel::<itc::SignalToHeadThread>();
+    drop(rx);
     let arc_tx = Arc::new(tx);
     gui::launch_gui(arc_tx.clone());
 }
