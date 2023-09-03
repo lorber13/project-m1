@@ -5,8 +5,10 @@ use super::{super::*, GlobalGuiState};
 use screenshots::Screen;
 extern crate image;
 use super::super::itc::ScreenshotDim;
-use std::rc::Rc;
-
+use std::sync::{Arc, Mutex};
+use std::io::stderr;
+use std::io::Write;
+use std::sync::mpsc::Sender;
 
 
 
@@ -15,14 +17,35 @@ pub struct MainWindow {
     output_format: image_coding::ImageFormat,
     area: ScreenshotDim,
     bool_clipboard: bool,
-    global_gui_state: Rc<GlobalGuiState>
+    global_gui_state: Arc<Mutex<GlobalGuiState>>,
+    head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>
 }
 impl MainWindow{
-    pub fn new(global_gui_state: Rc<GlobalGuiState>) -> Self{
+    pub fn new(global_gui_state: Arc<Mutex<GlobalGuiState>>, head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self{
         Self { output_format: image_coding::ImageFormat::Png,
         area: ScreenshotDim::Fullscreen, bool_clipboard: false,
-        global_gui_state}
+        global_gui_state,
+        head_thread_tx}
     }
+
+    fn send_acquire_signal(&self, sd: ScreenshotDim)
+    {
+        match self.head_thread_tx.lock().unwrap().send(crate::itc::SignalToHeadThread::AcquirePressed(sd))
+        {
+            Ok(_) =>(),
+            Err(e) =>
+            {
+                if DEBUG {println!("DEBUG: attempting to lock global_gui_state {:?}", self.global_gui_state);}
+                { 
+                    let ggstate = self.global_gui_state.lock().unwrap();
+                    let mut guard = ggstate.show_alert.lock().unwrap();
+                    *guard = Some("Impossible to acquire.\nService not available.\nPlease restart the program.");
+                }
+                writeln!(stderr(), "{}", e);  
+            }
+        }
+    }
+
 }
 
 
@@ -67,7 +90,7 @@ impl MainWindow{
                 if ui.button("Acquire").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
-                    self.global_gui_state.send_acquire_signal(self.area.clone());
+                    self.send_acquire_signal(self.area.clone());
                
                
                 }

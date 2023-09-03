@@ -25,8 +25,8 @@ impl Clone for ScreenshotDim
 
 pub enum SignalToHeadThread
 {
-    ShowMainWindow,
     AcquirePressed(ScreenshotDim),
     RectSelected(Rect),
-    PathSelected(PathBuf)
+    PathSelected(PathBuf),
+    Shutdown
 }

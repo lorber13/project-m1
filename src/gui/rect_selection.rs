@@ -1,23 +1,44 @@
 use crate::gui::GlobalGuiState;
 
 use eframe::egui;
-use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
+use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 use egui_extras::RetainedImage;
-use screenshots::Screen;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::io::stderr;
+use std::io::Write;
+use std::sync::mpsc::Sender;
 
 pub struct RectSelection {
     image: RetainedImage,
     start_drag_point: Option<Pos2>,
-    global_gui_state: Rc<GlobalGuiState>,
+    global_gui_state: Arc<Mutex<GlobalGuiState>>,
+    head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>
 }
 
 impl RectSelection {
-    pub fn new(global_gui_state: Rc<GlobalGuiState>) -> Self {
+    pub fn new(global_gui_state: Arc<Mutex<GlobalGuiState>>, head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self {
         Self {
-            image: capture_screenshot(),
+            image: crate::screenshot::fullscreen_screenshot(),
             start_drag_point: None,
             global_gui_state,
+            head_thread_tx
+        }
+    }
+
+    fn send_rect_selected(&self, rect: Rect)
+    {
+        match self.head_thread_tx.lock().unwrap().send(crate::itc::SignalToHeadThread::RectSelected(rect))
+        {
+            Ok(_) =>(),
+            Err(e) =>
+            {
+                {
+                    let ggstate = self.global_gui_state.lock().unwrap();
+                    let mut guard = ggstate.show_alert.lock().unwrap();
+                    *guard = Some("Impossible to send coordinates of rect.\nService not available.\nPlease restart the program.");
+                }
+                writeln!(stderr(), "{}", e);  
+            }
         }
     }
 }
@@ -46,7 +67,7 @@ impl eframe::App for RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        self.global_gui_state.clone().send_rect_selected(Rect::from_points(&[
+                        self.send_rect_selected(Rect::from_points(&[
                                                                     self.start_drag_point.unwrap(),
                                                                     space.hover_pos().map(|point| point.round()).expect("error"),
                                                                 ])); 
@@ -76,10 +97,3 @@ impl eframe::App for RectSelection {
     }
 }
 
-fn capture_screenshot() -> RetainedImage {
-    let shot = Screen::all().unwrap().first().unwrap().capture().unwrap(); // todo: modify in case of multiple monitors
-    RetainedImage::from_color_image(
-        "screenshot_image",
-        ColorImage::from_rgba_unmultiplied([shot.width() as usize, shot.height() as usize], &shot),
-    )
-}
