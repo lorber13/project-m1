@@ -47,6 +47,7 @@ impl RectSelection {
 impl eframe::App for RectSelection {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         frame.set_fullscreen(true);
+        frame.set_visible(true);
         egui::Area::new("area_1").show(ctx, |ui| {
             let (space, painter) = ui.allocate_painter(
                 Vec2::new(ctx.screen_rect().width(), ctx.screen_rect().height()),

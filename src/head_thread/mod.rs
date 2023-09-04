@@ -59,8 +59,6 @@ impl HeadThread
             ScreenshotDim::Rectangle => 
             {
                 self.gui.clone().switch_to_none();
-
-                let s = screenshot::fullscreen_screenshot();
                 self.gui.clone().switch_to_rect_selection();
             },
             ScreenshotDim::Fullscreen => () //TO DO: usare il codice della libreria screenshots

@@ -21,6 +21,9 @@ use rect_selection::RectSelection;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::*;
 use std::fmt::Formatter;
+use egui::Vec2;
+
+use crate::DEBUG;
 
 pub enum EnumGuiState
 {
@@ -94,9 +97,12 @@ impl GlobalGuiState
 
     pub fn switch_to_rect_selection(self: Arc<Self>)
     {
+        if DEBUG {println!("invoking RectSelection::new()");}
         let rs = RectSelection::new(self.clone(), self.head_thread_tx.clone());
+        if DEBUG {println!("trying to acquire lock to switch to rect selection: {:?}", self.state);}
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::ShowingRectSelection(Arc::new(Mutex::new(rs)));
+        if DEBUG {println!("lock acquired. State changed in: {:?}", *guard);}
     }
 
     pub fn switch_to_none(&self)
@@ -154,7 +160,7 @@ impl eframe::App for GuiWrapper
         {
             EnumGuiState::ShowingMainWindow(mw) => {let mut g = mw.lock().unwrap(); g.update(ctx, frame); },
             EnumGuiState::ShowingRectSelection(rs) => { let mut g = rs.lock().unwrap();g.update(ctx, frame); },
-            EnumGuiState::None => {frame.set_visible(false); }
+            EnumGuiState::None => {frame.set_window_size(Vec2::ZERO); frame.set_decorations(false); }
         }
     }
 }

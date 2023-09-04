@@ -52,8 +52,11 @@ impl MainWindow{
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
+        _frame.set_decorations(true);
         _frame.set_fullscreen(false);
         _frame.set_maximized(false);
+        _frame.set_window_size(egui::Vec2::new(500.0, 300.0));
+        _frame.set_visible(true);
         let screens= Screen::all().expect("Mismatching type in Vec<Screen>");
 
            egui::CentralPanel::default().show(ctx, |ui|
