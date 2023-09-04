@@ -76,30 +76,30 @@ impl Clone for GlobalGuiState
 
 impl GlobalGuiState
 {
-    fn new(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Arc<Mutex<Self>>
+    fn new(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Arc<Self>
     {
-        let ret = Arc::new(Mutex::new(Self{state: Arc::new(Mutex::new(EnumGuiState::None)), 
-                                                                                head_thread_tx, 
-                                                                                show_alert: Arc::new(Mutex::new(None))}));
-        ret.lock().unwrap().switch_to_main_window(ret.clone());
+        let ret = Arc::new(Self{state: Arc::new(Mutex::new(EnumGuiState::None)), 
+                                                            head_thread_tx, 
+                                                            show_alert: Arc::new(Mutex::new(None))});
+        ret.clone().switch_to_main_window();
         ret
     }
 
-    pub fn switch_to_main_window(&self, arc: Arc<Mutex<Self>>)
+    pub fn switch_to_main_window(self: Arc<Self>)
     {
-        let rs = MainWindow::new(arc.clone(), self.head_thread_tx.clone());
+        let rs = MainWindow::new(self.clone(), self.head_thread_tx.clone());
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::ShowingMainWindow(Arc::new(Mutex::new(rs)));
     }
 
-    pub fn switch_to_rect_selection(&self, arc: Arc<Mutex<Self>>)
+    pub fn switch_to_rect_selection(self: Arc<Self>)
     {
-        let rs = RectSelection::new(arc.clone(), self.head_thread_tx.clone());
+        let rs = RectSelection::new(self.clone(), self.head_thread_tx.clone());
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::ShowingRectSelection(Arc::new(Mutex::new(rs)));
     }
 
-    pub fn switch_to_none(&self, arc: Arc<Mutex<Self>>)
+    pub fn switch_to_none(&self)
     {
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::None;
@@ -110,7 +110,7 @@ impl GlobalGuiState
 
 struct GuiWrapper //solo wrapper per GlobalGuiState
 {
-    ggstate: Arc<Mutex<GlobalGuiState>>
+    ggstate: Arc<GlobalGuiState>
 }
 
 impl GuiWrapper
@@ -121,17 +121,16 @@ impl GuiWrapper
     }
 }
 
-pub fn new_gui(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Arc<Mutex<GlobalGuiState>>
+pub fn new_gui(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Arc<GlobalGuiState>
 {
     GlobalGuiState::new(head_thread_tx)
 }
 
 
-pub fn launch_gui(ggstate: Arc<Mutex<GlobalGuiState>>)
+pub fn launch_gui(ggstate: Arc<GlobalGuiState>)
 {  
     let options = eframe::NativeOptions::default();
     let wrapper = GuiWrapper{ggstate};
-    let ret = wrapper.ggstate.clone();
     eframe::run_native(
         "Simple screenshot App", 
         options,  
@@ -143,18 +142,19 @@ impl eframe::App for GuiWrapper
 {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) 
     {
-        if crate::DEBUG {println!("gui refresh");}
-        let guard = self.ggstate.lock().unwrap();
-        error_alert::show_error_alert(ctx, guard.show_alert.clone());
-        let temp = guard.state.lock().unwrap().clone();
-        drop(guard); //NECESSARIO per permettere ad altri thread di ottenere il lock
+        if crate::DEBUG {print!("gui refresh. ");}
+        
+        error_alert::show_error_alert(ctx, self.ggstate.show_alert.clone());
+        let temp = self.ggstate.state.lock().unwrap().clone();
+
+        if crate::DEBUG {println!("state = {:?}", temp);}
 
 
         match temp
         {
             EnumGuiState::ShowingMainWindow(mw) => {let mut g = mw.lock().unwrap(); g.update(ctx, frame); },
             EnumGuiState::ShowingRectSelection(rs) => { let mut g = rs.lock().unwrap();g.update(ctx, frame); },
-            EnumGuiState::None => ()
+            EnumGuiState::None => {frame.set_visible(false); }
         }
     }
 }

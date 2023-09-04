@@ -2,23 +2,24 @@
 use eframe::epaint::Rect;
 use image::RgbaImage;
 
+use crate::screenshot;
 use crate::{itc::ScreenshotDim, gui::GlobalGuiState};
 
 use super::itc::SignalToHeadThread;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 struct HeadThread 
 {
-    gui : Arc<Mutex<GlobalGuiState>>,
+    gui : Arc<GlobalGuiState>,
     rx: Receiver<SignalToHeadThread>,
     //state
     screenshot: Option<RgbaImage>,
     rect: Option<Rect>
 }
 
-pub fn start_head_thread(rx: Receiver<SignalToHeadThread>, gui : Arc<Mutex<GlobalGuiState>>)
+pub fn start_head_thread(rx: Receiver<SignalToHeadThread>, gui : Arc<GlobalGuiState>)
 {
     let mut head_thr = HeadThread::new(rx, gui);
     head_thr.do_loop() 
@@ -27,7 +28,7 @@ pub fn start_head_thread(rx: Receiver<SignalToHeadThread>, gui : Arc<Mutex<Globa
 
 impl HeadThread
 {
-    fn new(rx: Receiver<SignalToHeadThread>, gui: Arc<Mutex<GlobalGuiState>> ) -> Self
+    fn new(rx: Receiver<SignalToHeadThread>, gui: Arc<GlobalGuiState> ) -> Self
     {
         Self{rx, gui, screenshot: None, rect: None}
     }
@@ -42,7 +43,7 @@ impl HeadThread
                 {
                     SignalToHeadThread::Shutdown => break,
                     SignalToHeadThread::AcquirePressed(sd) => self.manage_acquire_request(sd),
-                    SignalToHeadThread::RectSelected(r) => self.do_screenshot(), 
+                    SignalToHeadThread::RectSelected(r) => self.do_rect_screenshot(r), 
                     SignalToHeadThread::PathSelected(pb) => self.manage_save_request(pb)
                 }
             }else {
@@ -55,13 +56,21 @@ impl HeadThread
     {
         match sd
         {
-            ScreenshotDim::Rectangle => self.gui.lock().unwrap().switch_to_rect_selection(self.gui.clone()),
+            ScreenshotDim::Rectangle => 
+            {
+                self.gui.clone().switch_to_none();
+
+                let s = screenshot::fullscreen_screenshot();
+                self.gui.clone().switch_to_rect_selection();
+            },
             ScreenshotDim::Fullscreen => () //TO DO: usare il codice della libreria screenshots
         }
     }
 
-    fn do_screenshot(&mut self)
+    fn do_rect_screenshot(&mut self, rect: Rect)
     {
+        self.gui.switch_to_none();
+
         //codice del crate screenshots
         // self.screenshot = ...
     }

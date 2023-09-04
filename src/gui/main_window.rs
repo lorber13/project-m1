@@ -17,11 +17,11 @@ pub struct MainWindow {
     output_format: image_coding::ImageFormat,
     area: ScreenshotDim,
     bool_clipboard: bool,
-    global_gui_state: Arc<Mutex<GlobalGuiState>>,
+    global_gui_state: Arc<GlobalGuiState>,
     head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>
 }
 impl MainWindow{
-    pub fn new(global_gui_state: Arc<Mutex<GlobalGuiState>>, head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self{
+    pub fn new(global_gui_state: Arc<GlobalGuiState>, head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self{
         Self { output_format: image_coding::ImageFormat::Png,
         area: ScreenshotDim::Fullscreen, bool_clipboard: false,
         global_gui_state,
@@ -37,8 +37,7 @@ impl MainWindow{
             {
                 if DEBUG {println!("DEBUG: attempting to lock global_gui_state {:?}", self.global_gui_state);}
                 { 
-                    let ggstate = self.global_gui_state.lock().unwrap();
-                    let mut guard = ggstate.show_alert.lock().unwrap();
+                    let mut guard = self.global_gui_state.show_alert.lock().unwrap();
                     *guard = Some("Impossible to acquire.\nService not available.\nPlease restart the program.");
                 }
                 writeln!(stderr(), "{}", e);  

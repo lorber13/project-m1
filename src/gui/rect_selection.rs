@@ -1,4 +1,5 @@
 use crate::gui::GlobalGuiState;
+use crate::screenshot;
 
 use eframe::egui;
 use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
@@ -11,14 +12,15 @@ use std::sync::mpsc::Sender;
 pub struct RectSelection {
     image: RetainedImage,
     start_drag_point: Option<Pos2>,
-    global_gui_state: Arc<Mutex<GlobalGuiState>>,
+    global_gui_state: Arc<GlobalGuiState>,
     head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>
 }
 
 impl RectSelection {
-    pub fn new(global_gui_state: Arc<Mutex<GlobalGuiState>>, head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self {
+    pub fn new(global_gui_state: Arc<GlobalGuiState>, 
+                head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self {
         Self {
-            image: crate::screenshot::fullscreen_screenshot(),
+            image: screenshot::fullscreen_screenshot(),
             start_drag_point: None,
             global_gui_state,
             head_thread_tx
@@ -33,8 +35,7 @@ impl RectSelection {
             Err(e) =>
             {
                 {
-                    let ggstate = self.global_gui_state.lock().unwrap();
-                    let mut guard = ggstate.show_alert.lock().unwrap();
+                    let mut guard = self.global_gui_state.show_alert.lock().unwrap();
                     *guard = Some("Impossible to send coordinates of rect.\nService not available.\nPlease restart the program.");
                 }
                 writeln!(stderr(), "{}", e);  
