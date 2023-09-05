@@ -27,6 +27,6 @@ pub enum SignalToHeadThread
 {
     AcquirePressed(ScreenshotDim),
     RectSelected(Rect),
-    PathSelected(PathBuf),
+    PathSelected(Option<PathBuf>),
     Shutdown
 }

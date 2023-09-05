@@ -3,10 +3,6 @@
 use std::path::PathBuf;
 use rfd::FileDialog;
 
-struct FileD 
-{
-
-}
   
 pub fn show_file_dialog() -> Option<PathBuf>
 {

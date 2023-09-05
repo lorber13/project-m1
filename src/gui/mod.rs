@@ -63,6 +63,7 @@ pub struct GlobalGuiState
 {
     state: Arc<Mutex<EnumGuiState>>,
     show_alert: Arc<Mutex<Option<&'static str>>>,
+    show_file_dialog: Arc<Mutex<bool>>,
     head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>
 }
 
@@ -71,6 +72,7 @@ impl Clone for GlobalGuiState
     fn clone(&self) -> Self
     {
         Self{state: self.state.clone(), show_alert: self.show_alert.clone(), 
+                show_file_dialog: self.show_file_dialog.clone(),
                 head_thread_tx: self.head_thread_tx.clone()}
     }
 }
@@ -83,34 +85,60 @@ impl GlobalGuiState
     {
         let ret = Arc::new(Self{state: Arc::new(Mutex::new(EnumGuiState::None)), 
                                                             head_thread_tx, 
+                                                            show_file_dialog: Arc::new(Mutex::new(false)),
                                                             show_alert: Arc::new(Mutex::new(None))});
         ret.clone().switch_to_main_window();
         ret
     }
 
-    pub fn switch_to_main_window(self: Arc<Self>)
+    pub fn switch_to_main_window(self: &Arc<Self>)
     {
         let rs = MainWindow::new(self.clone(), self.head_thread_tx.clone());
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::ShowingMainWindow(Arc::new(Mutex::new(rs)));
     }
 
-    pub fn switch_to_rect_selection(self: Arc<Self>)
+    pub fn switch_to_rect_selection(self: &Arc<Self>) 
     {
-        if DEBUG {println!("invoking RectSelection::new()");}
-        let rs = RectSelection::new(self.clone(), self.head_thread_tx.clone());
-        if DEBUG {println!("trying to acquire lock to switch to rect selection: {:?}", self.state);}
-        let mut guard = self.state.lock().unwrap();
-        *guard = EnumGuiState::ShowingRectSelection(Arc::new(Mutex::new(rs)));
-        if DEBUG {println!("lock acquired. State changed in: {:?}", *guard);}
+        if DEBUG {println!("invoking RectSelection::new()")}; 
+
+        match RectSelection::new(self.clone(), self.head_thread_tx.clone())
+        {
+            Err(_) => self.show_error_alert("Unable to perform the action. Screenshot service not available"),
+            Ok(rs) => 
+            {
+                if DEBUG {println!("trying to acquire lock to switch to rect selection: {:?}", self.state);}
+
+                let mut guard = self.state.lock().unwrap();
+                *guard = EnumGuiState::ShowingRectSelection(Arc::new(Mutex::new(rs)));
+
+                if DEBUG {println!("lock acquired. State changed in: {:?}", *guard);}
+            }
+        }
+
+        
     }
 
-    pub fn switch_to_none(&self)
+    pub fn switch_to_none(self: &Arc<Self>)
     {
         let mut guard = self.state.lock().unwrap();
         *guard = EnumGuiState::None;
     }
 
+    pub fn show_error_alert(self: &Arc<Self>, s: &'static str)
+    {
+        self.clone().show_alert.lock().unwrap().replace(s);
+    }
+
+    pub fn show_file_dialog(self: &Arc<Self>)
+    {
+        let tx = self.head_thread_tx.clone();
+        std::thread::spawn(move ||
+        {
+            let ret = file_dialog::show_file_dialog();
+            tx.lock().unwrap().send(crate::itc::SignalToHeadThread::PathSelected(ret));
+        });
+    }
     
 }
 

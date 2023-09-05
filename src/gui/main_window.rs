@@ -37,8 +37,7 @@ impl MainWindow{
             {
                 if DEBUG {println!("DEBUG: attempting to lock global_gui_state {:?}", self.global_gui_state);}
                 { 
-                    let mut guard = self.global_gui_state.show_alert.lock().unwrap();
-                    *guard = Some("Impossible to acquire.\nService not available.\nPlease restart the program.");
+                    self.global_gui_state.show_error_alert("Impossible to acquire.\nService not available.\nPlease restart the program.");
                 }
                 writeln!(stderr(), "{}", e);  
             }

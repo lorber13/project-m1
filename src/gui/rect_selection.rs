@@ -2,7 +2,7 @@ use crate::gui::GlobalGuiState;
 use crate::screenshot;
 
 use eframe::egui;
-use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
+use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2, ColorImage};
 use egui_extras::RetainedImage;
 use std::sync::{Arc, Mutex};
 use std::io::stderr;
@@ -18,12 +18,23 @@ pub struct RectSelection {
 
 impl RectSelection {
     pub fn new(global_gui_state: Arc<GlobalGuiState>, 
-                head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Self {
-        Self {
-            image: screenshot::fullscreen_screenshot(),
-            start_drag_point: None,
-            global_gui_state,
-            head_thread_tx
+                head_thread_tx: Arc<Mutex<Sender<crate::itc::SignalToHeadThread>>>) -> Result<Self, &'static str> {
+        match screenshot::fullscreen_screenshot()
+        {
+            Ok(rgba) =>   
+            {
+                let image = RetainedImage::from_color_image(
+                    "screenshot_image",
+                    ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], 
+                    &rgba));
+                Ok(Self {
+                        image,
+                        start_drag_point: None,
+                        global_gui_state,
+                        head_thread_tx
+                    })
+            } ,
+            Err(s) => Err(s)
         }
     }
 
@@ -34,10 +45,7 @@ impl RectSelection {
             Ok(_) =>(),
             Err(e) =>
             {
-                {
-                    let mut guard = self.global_gui_state.show_alert.lock().unwrap();
-                    *guard = Some("Impossible to send coordinates of rect.\nService not available.\nPlease restart the program.");
-                }
+                self.global_gui_state.show_error_alert("Impossible to send coordinates of rect.\nService not available.\nPlease restart the program.");
                 writeln!(stderr(), "{}", e);  
             }
         }
