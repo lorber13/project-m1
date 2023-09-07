@@ -1,5 +1,5 @@
 use crate::gui::GlobalGuiState;
-use crate::screenshot;
+use crate::{screenshot, image_coding, DEBUG};
 
 use eframe::egui;
 use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2, ColorImage};
@@ -23,6 +23,7 @@ impl RectSelection {
         {
             Ok(rgba) =>   
             {
+                if DEBUG { image_coding::copy_to_clipboard(&rgba); }
                 let image = RetainedImage::from_color_image(
                     "screenshot_image",
                     ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], 
@@ -55,7 +56,7 @@ impl RectSelection {
 impl eframe::App for RectSelection {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         frame.set_fullscreen(true);
-        frame.set_visible(true);
+        
         egui::Area::new("area_1").show(ctx, |ui| {
             let (space, painter) = ui.allocate_painter(
                 Vec2::new(ctx.screen_rect().width(), ctx.screen_rect().height()),

@@ -1,6 +1,5 @@
 
 use eframe::epaint::Rect;
-use egui_extras::RetainedImage;
 use image::RgbaImage;
 
 use crate::{screenshot, image_coding};
@@ -70,7 +69,8 @@ impl HeadThread
 
     fn do_rect_screenshot(&mut self, rect: Rect)
     {
-        self.gui.switch_to_none();
+        
+        //self.gui.switch_to_none();
 
         //codice del crate screenshots
         // self.screenshot = ...

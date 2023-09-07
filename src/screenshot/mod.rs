@@ -1,12 +1,11 @@
 use image::RgbaImage;
 use screenshots::Screen;
-use egui_extras::RetainedImage;
-use eframe::egui::ColorImage;
 use std::io::Write;
 
 
 pub fn fullscreen_screenshot() -> Result<RgbaImage, &'static str>
 {
+    if crate::DEBUG {println!("DEBUG: performing fullscreen screenshot");}
     match Screen::all().unwrap().first().unwrap().capture() // todo: modify in case of multiple monitors
     {
         Ok(shot) => Ok(shot),

@@ -18,7 +18,7 @@ pub mod file_dialog;
 use eframe::egui;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
 use std::sync::mpsc::*;
 use std::fmt::Formatter;
 use egui::Vec2;
@@ -29,7 +29,7 @@ pub enum EnumGuiState
 {
     ShowingMainWindow(Arc<Mutex<MainWindow>>),
     ShowingRectSelection(Arc<Mutex<RectSelection>>),
-    None
+    None(Arc<(Condvar, Mutex<bool>)>)
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -40,7 +40,7 @@ impl std::fmt::Debug for EnumGuiState
         {
             EnumGuiState::ShowingMainWindow(_) => write!(f, "EnumGuiState::ShowingMainWindow"),
             EnumGuiState::ShowingRectSelection(_) => write!(f, "EnumGuiState::ShowingRectSelection"),
-            EnumGuiState::None => write!(f, "EnumGuiState::None")
+            EnumGuiState::None(_) => write!(f, "EnumGuiState::None")
         }
     }
 }
@@ -53,7 +53,7 @@ impl Clone for EnumGuiState
         {
             Self::ShowingMainWindow(rc) => Self::ShowingMainWindow(rc.clone()),
             Self::ShowingRectSelection(rc) => Self::ShowingRectSelection(rc.clone()),
-            Self::None => Self::None
+            Self::None(cv) => Self::None(cv.clone())
         }
     }
 }
@@ -83,7 +83,8 @@ impl GlobalGuiState
 {
     fn new(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Arc<Self>
     {
-        let ret = Arc::new(Self{state: Arc::new(Mutex::new(EnumGuiState::None)), 
+        let mut cv = Arc::new((Condvar::new(), Mutex::new(true)));
+        let ret = Arc::new(Self{state: Arc::new(Mutex::new(EnumGuiState::None(cv))), 
                                                             head_thread_tx, 
                                                             show_file_dialog: Arc::new(Mutex::new(false)),
                                                             show_alert: Arc::new(Mutex::new(None))});
@@ -104,7 +105,7 @@ impl GlobalGuiState
 
         match RectSelection::new(self.clone(), self.head_thread_tx.clone())
         {
-            Err(_) => self.show_error_alert("Unable to perform the action. Screenshot service not available"),
+            Err(_) =>{ self.show_error_alert("Unable to perform the action. Screenshot service not available"); self.switch_to_main_window() },
             Ok(rs) => 
             {
                 if DEBUG {println!("trying to acquire lock to switch to rect selection: {:?}", self.state);}
@@ -121,8 +122,11 @@ impl GlobalGuiState
 
     pub fn switch_to_none(self: &Arc<Self>)
     {
+        let mut cv = Arc::new((Condvar::new(), Mutex::new(false)));
         let mut guard = self.state.lock().unwrap();
-        *guard = EnumGuiState::None;
+        *guard = EnumGuiState::None(cv.clone());
+        drop(guard);
+        cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
     }
 
     pub fn show_error_alert(self: &Arc<Self>, s: &'static str)
@@ -188,7 +192,13 @@ impl eframe::App for GuiWrapper
         {
             EnumGuiState::ShowingMainWindow(mw) => {let mut g = mw.lock().unwrap(); g.update(ctx, frame); },
             EnumGuiState::ShowingRectSelection(rs) => { let mut g = rs.lock().unwrap();g.update(ctx, frame); },
-            EnumGuiState::None => {frame.set_window_size(Vec2::ZERO); frame.set_decorations(false); }
+            EnumGuiState::None(cv) => 
+            {
+                frame.set_window_size(Vec2::ZERO); frame.set_decorations(false);
+                let mut guard = cv.1.lock().unwrap();
+                *guard = true;
+                cv.0.notify_all(); 
+            }
         }
     }
 }
