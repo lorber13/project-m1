@@ -4,7 +4,7 @@ use crate::gui::egui::Context;
 use crate::gui::egui::Pos2;
 use std::sync::{Mutex, Arc};
 
-pub fn show_error_alert(ctx: &Context, show: Arc<Mutex<Option<&'static str>>>)
+pub fn show_error_alert(ctx: &Context, show: Option<&'static str>>>)
 {
     let mut guard = show.lock().unwrap();
     if let Some(msg) = *guard
