@@ -18,24 +18,20 @@ pub mod file_dialog;
 use eframe::egui;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::mpsc::*;
 use std::fmt::Formatter;
-use egui::Vec2;
-use std::rc::Rc;
-use eframe::egui::Pos2;
-use egui_extras::RetainedImage;
+use std::path::PathBuf;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
 use image::RgbaImage;
 
-use crate::DEBUG;
 use crate::screenshot::fullscreen_screenshot;
 
 pub enum EnumGuiState
 {
-    ShowingMainWindow(Option<MainWindow>),
-    ShowingRectSelection((Option<RectSelection>, Option<Receiver<RgbaImage>>)),
-    ShowingFileDialog(Receiver<std::path::PathBuf>),
-    None(Arc<(Condvar, Mutex<bool>)>)
+    ShowingMainWindow(MainWindow),
+    ShowingRectSelection(Option<RectSelection>, Option<JoinHandle<Result<RgbaImage, &'static str>>>),
+    ShowingFileDialog(JoinHandle<Option<PathBuf>>)
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -45,8 +41,8 @@ impl std::fmt::Debug for EnumGuiState
         match self
         {
             EnumGuiState::ShowingMainWindow(_) => write!(f, "EnumGuiState::ShowingMainWindow"),
-            EnumGuiState::ShowingRectSelection(_) => write!(f, "EnumGuiState::ShowingRectSelection"),
-            EnumGuiState::None(_) => write!(f, "EnumGuiState::None")
+            EnumGuiState::ShowingRectSelection(_, _) => write!(f, "EnumGuiState::ShowingRectSelection"),
+            EnumGuiState::ShowingFileDialog(_) => { todo!() }
         }
     }
 }
@@ -71,7 +67,8 @@ impl Clone for EnumGuiState
 pub struct GlobalGuiState
 {
     state: EnumGuiState,
-    show_alert: Option<&'static str>
+    alert: Option<&'static str>,
+    current_image: Option<RgbaImage>
 }
 
 /*
@@ -90,58 +87,60 @@ impl Clone for GlobalGuiState
 
 impl GlobalGuiState
 {
-    fn new(head_thread_tx: Arc<Mutex<Sender<super::itc::SignalToHeadThread>>>) -> Self
+    fn new() -> Self
     {
-        let mut cv = Arc::new((Condvar::new(), Mutex::new(true)));
-        let ret = Rc::new(Self{state: EnumGuiState::None(cv),
-                                                    show_alert: None});
-        ret.clone().switch_to_main_window();
-        ret
+        GlobalGuiState {
+            state: EnumGuiState::ShowingMainWindow(MainWindow::new()),
+            alert: None,
+            current_image: None
+        }
     }
 
     pub fn switch_to_main_window(&mut self)
     {
-        let rs = MainWindow::new(self.clone(), self.head_thread_tx.clone());
-        let mut guard = self.state.lock().unwrap();
-        *guard = EnumGuiState::ShowingMainWindow(rs);
+        self.state = EnumGuiState::ShowingMainWindow(MainWindow::new());
     }
 
     pub fn switch_to_rect_selection(&mut self)
     {
-        let (rx, tx) = std::sync::channel();
-        std::thread::spawn(move||{let img = fullscreen_screenshot(); tx.send(img);})
-        self.state = EnumGuiState::ShowingRectSelection((None, Some(rx)));
+        let wait = thread::spawn(move||{
+            thread::sleep(Duration::from_secs(5));
+            fullscreen_screenshot()
+        });
+        self.state = EnumGuiState::ShowingRectSelection(
+            None,
+            Some(wait)
+        );
     }
 
-    pub fn switch_to_none(&mut self)
-    {
-        let mut cv = Arc::new((Condvar::new(), Mutex::new(false)));
-        let mut guard = self.state.lock().unwrap();
-        *guard = EnumGuiState::None(cv.clone());
-        drop(guard);
-        cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
-    }
+    //pub fn switch_to_none(&mut self)
+    //{
+    //    let mut cv = Arc::new((Condvar::new(), Mutex::new(false)));
+    //    let mut guard = self.state.lock().unwrap();
+    //    *guard = EnumGuiState::None(cv.clone());
+    //    drop(guard);
+    //    cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
+    //}
 
-    pub fn show_error_alert(&mut self s: &'static str)
+    pub fn show_error_alert(&mut self, s: &'static str) // todo: it is called by head_thread only. Do we still need it?
     {
-        self.clone().show_alert.lock().unwrap().replace(s);
+        self.alert.replace(s);
     }
 
     pub fn show_file_dialog(&mut self)
     {
-        let tx = self.head_thread_tx.clone();
-        std::thread::spawn(move ||
+        let wait = thread::spawn(||
         {
-            let ret = file_dialog::show_file_dialog();
-            tx.lock().unwrap().send(crate::itc::SignalToHeadThread::PathSelected(ret));
+            file_dialog::show_file_dialog() // -> Option<PathBuf>
         });
+        self.state = EnumGuiState::ShowingFileDialog(wait);
     }
     
 }
 
 
 
-pub fn launch_gui(ggstate: Arc<GlobalGuiState>)
+pub fn launch_gui()
 {  
     let options = eframe::NativeOptions::default();
     eframe::run_native(
@@ -157,39 +156,43 @@ impl eframe::App for GlobalGuiState
     {
         if crate::DEBUG {print!("gui refresh. ");}
         
-        error_alert::show_error_alert(ctx, self.ggstate.show_alert.clone());
+        error_alert::show_error_alert(ctx, &mut self.alert);
 
         if crate::DEBUG {println!("state = {:?}", self.state);}
 
 
-        match self.state
+        // todo move the code in a dedicated function
+        match &mut self.state
         {
-            EnumGuiState::ShowingMainWindow(mw) => {mw.update(ctx, frame); },
-            EnumGuiState::ShowingRectSelection((opt_rs, opt_r)) =>
+            EnumGuiState::ShowingMainWindow(ref mut mw) => {
+                mw.update(ctx, frame); // todo: update() returns an option
+            },
+            EnumGuiState::ShowingRectSelection(opt_rs, opt_r) =>
                 {
-                    if let Some(r) = opt_r
+                    if let Some(r) = opt_r.take() // todo: it is a workaround to take ownership of the value inside the option
                     {
-                        if let Ok(img) = r.try_recv()
+                        if r.is_finished()
                         {
-                            let mut rs = RectSelection::new(img);
-                            self.state = EnumGuiState::ShowingRectSelection((Some(rs), None));
-
-                        }else
+                            if let Ok(ret) = r.join() {
+                                if let Ok(img) = ret {
+                                    let rs = RectSelection::new(&img);
+                                    self.state = EnumGuiState::ShowingRectSelection(Some(rs), None);
+                                }
+                            }
+                        } else
                         {
-                                self.show_loading();
+                            todo!() // show_loading
                         }
-                    }else if let Some(rs) = opt_rs
+                    } else if let Some(ref mut rs) = opt_rs
                     {
-                        rs.update(ctx, frame);
+                        if let Some(screenshot) = rs.update(ctx, frame) {
+                            self.current_image = Some(screenshot);
+                        };
+                    } else {
+                        unreachable!();
                     }
                 },
-            EnumGuiState::None(cv) => 
-            {
-                frame.set_window_size(Vec2::ZERO); frame.set_decorations(false);
-                let mut guard = cv.1.lock().unwrap();
-                *guard = true;
-                cv.0.notify_all(); 
-            }
+            EnumGuiState::ShowingFileDialog(_) => { } // todo
         }
     }
 }

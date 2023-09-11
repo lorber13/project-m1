@@ -1,42 +1,35 @@
-use crate::gui::GlobalGuiState;
-use crate::{screenshot, image_coding, DEBUG};
+use crate::{image_coding, DEBUG};
 
 use eframe::egui;
-use egui::{pos2, Color32, Pos2, Rect, Rounding, Sense, Stroke, Vec2, ColorImage};
+use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
 use egui_extras::RetainedImage;
-use std::sync::{Arc, Mutex};
-use std::io::stderr;
-use std::io::Write;
-use std::sync::mpsc::Sender;
 use image::RgbaImage;
 
 pub struct RectSelection {
     image: RetainedImage,
-    start_drag_point: Option<Pos2>
+    start_drag_point: Option<Pos2>,
 }
 
 impl RectSelection {
-    pub fn new() -> Result<Self, &'static str> {
-        match screenshot::fullscreen_screenshot()
-        {
-            Ok(rgba) =>
-                {
-                    if DEBUG { image_coding::copy_to_clipboard(&rgba); }
-                    let image = RetainedImage::from_color_image(
-                        "screenshot_image",
-                        ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize],
-                                                           &rgba));
-                    Ok(Self {
-                        image,
-                        start_drag_point: None
-                    })
-                },
-            Err(s) => Err(s)
+    pub fn new(rgba: &RgbaImage) -> Self {
+        if DEBUG {
+            let _ = image_coding::copy_to_clipboard(&rgba);
+        }
+        let image = RetainedImage::from_color_image(
+            "screenshot_image",
+            ColorImage::from_rgba_unmultiplied(
+                [rgba.width() as usize, rgba.height() as usize],
+                &rgba,
+            ),
+        );
+        Self {
+            image,
+            start_drag_point: None,
         }
     }
 
     pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<RgbaImage> {
-        frame.set_fullscreen(true);
+        frame.set_fullscreen(true); // todo: should be called once, not every frame
 
         egui::Area::new("area_1").show(ctx, |ui| {
             let (space, painter) = ui.allocate_painter(
@@ -59,10 +52,10 @@ impl RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        return Some(Rect::from_points(&[
-                            self.start_drag_point.unwrap(),
-                            space.hover_pos().map(|point| point.round()).expect("error"),
-                        ]));
+                        //return Some(Rect::from_points(&[
+                        //    self.start_drag_point.unwrap(),
+                        //    space.hover_pos().map(|point| point.round()).expect("error"),
+                        //]));
                     }
                     (false, false) => {
                         if let Some(pos1) = self.start_drag_point {
@@ -83,11 +76,7 @@ impl RectSelection {
                 // line put to prevent a strange bug in case of a click todo: investigate
                 self.start_drag_point = None;
             }
-
-            None
         });
+        None
     }
 }
-
-
-
