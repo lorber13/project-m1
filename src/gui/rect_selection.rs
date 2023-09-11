@@ -52,6 +52,7 @@ impl RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
+                        todo!()
                         //return Some(Rect::from_points(&[
                         //    self.start_drag_point.unwrap(),
                         //    space.hover_pos().map(|point| point.round()).expect("error"),
