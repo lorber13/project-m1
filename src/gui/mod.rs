@@ -41,9 +41,7 @@ pub enum EnumGuiState
 {
     MainWindow(MainWindow),
     RectSelection(Option<RectSelection>, Option<Receiver<Result<RgbaImage, &'static str>>>),
-    FileDialog(Receiver<Option<PathBuf>>, EditImage),
-    EditImage(EditImage)
-
+    EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -53,9 +51,8 @@ impl std::fmt::Debug for EnumGuiState
         match self
         {
             EnumGuiState::MainWindow(_) => write!(f, "EnumGuiState::MainWindow"),
-            EnumGuiState::RectSelection(_, _) => write!(f, "EnumGuiState::RectSelection"),
-            EnumGuiState::FileDialog(_) => { write!(f, "EnumGuiState::FileDialog") }
-            EnumGuiState::EditImage(_) => write!(f, "EnumGuiState::EditImage")
+            EnumGuiState::RectSelection(..) => write!(f, "EnumGuiState::RectSelection"),
+            EnumGuiState::EditImage(..) => write!(f, "EnumGuiState::EditImage")
         }
     }
 }
@@ -137,14 +134,19 @@ impl GlobalGuiState
     //    cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
     //}
 
-    pub fn switch_to_file_dialog(&mut self, ei : EditImage) 
+    pub fn start_file_dialog(&mut self) 
     {
         let (tx, rx) = channel::<Option<PathBuf>>();
         std::thread::spawn(move ||
             {
                 tx.send(file_dialog::show_file_dialog())
             });
-        self.state = EnumGuiState::FileDialog(rx, ei);
+
+        if let EnumGuiState::EditImage(_, ref mut r_opt ) = self.state
+        {
+            *r_opt = Some(rx);
+        }
+        
     }
 
     fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -197,38 +199,53 @@ impl GlobalGuiState
 
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::EditImage(ref mut em) = self.state
+        if let EnumGuiState::EditImage(ref mut em, ref mut opt_r) = self.state
         {
-            match em.update(ctx, frame, true)
+            if let Some(_) = opt_r  //se vero, significa che il file dialog è aperto 
             {
-                EditImageEvent::Saved => 
+                self.wait_file_dialog(ctx, frame);
+            } else      //se il file dialog non è aperto, aggiorno normalmente la finestra
+            {
+                match em.update(ctx, frame, true)
+                {
+                    EditImageEvent::Saved => self.start_file_dialog(),
+                    EditImageEvent::Aborted => self.switch_to_main_window(),
+                    EditImageEvent::Nil => ()
+                }
             }
+
+           
         }
     }
 
-    fn show_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
+    fn wait_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::FileDialog(rx, ref mut em) = self.state
+        if let EnumGuiState::EditImage(mut em, ref mut opt_rx) = self.state
         {
-            match rx.try_recv() //controllo se il thread ha già inviato attraverso il canale
-            {
-                Ok(pb_opt) => {   //in caso sia già stato ricevuto un messaggio, esso può essere a sua volta None (se l'utente ha deciso di annullare il salvataggio)
-                    match pb_opt
-                    {
-                        Some(pb) => show_loading(ctx),  //TODO: spawnare il thread che effettua il salvataggio
-                        None => self.switch_to_main_window()    //se l'operazione è stata annullata, si torna alla finestra principale
+           if let Some(rx) = opt_rx
+           {
+                match rx.try_recv() //controllo se il thread ha già inviato attraverso il canale
+                {
+                    Ok(pb_opt) => {   //in caso sia già stato ricevuto un messaggio, esso può essere a sua volta None (se l'utente ha deciso di annullare il salvataggio)
+                        opt_rx.take();
+                        match pb_opt
+                        {
+                            Some(pb) => show_loading(ctx),  //TODO: spawnare il thread che effettua il salvataggio
+                            None => self.switch_to_main_window()    //se l'operazione è stata annullata, si torna alla finestra principale
+                        }
+                    },
+
+                    Err(TryRecvError::Empty) => {   //in caso non sia ancora stato ricevuto il messaggio, continuo a mostrare la finestra precedente disabilitata
+                        em.update(ctx, frame, false);
+                    },
+
+                    Err(TryRecvError::Disconnected) => {    //in caso il thread sia fallito, segnalo errore e torno a mostrare EditImage
+                        opt_rx.take();
+                        self.alert.replace("Error in file dialog. Please retry.");
+                        self.state = EnumGuiState::EditImage(em, None);
                     }
                 }
-
-                Err(TryRecvError::Empty) => {   //in caso non sia ancora stato ricevuto il messaggio, continuo a mostrare la finestra precedente disabilitata
-                    em.update(ctx, frame, false);
-                }
-
-                Err(TryRecvError::Disconnected) => {    //in caso il thread sia fallito, segnalo errore e torno a mostrare EditImage
-                    self.alert.replace("Error in file dialog. Please retry.");
-                    self.state = EnumGuiState::EditImage(em);
-                }
-            }
+           }
         }
     }
     
@@ -264,13 +281,10 @@ impl eframe::App for GlobalGuiState
             EnumGuiState::MainWindow(_) => {
                 self.show_main_window(ctx, frame);
             },
-            EnumGuiState::RectSelection(_, _) => {
+            EnumGuiState::RectSelection(..) => {
                     self.show_rect_selection(ctx, frame);
-            },
-            EnumGuiState::FileDialog(_) => { 
-                ctx.
             }, 
-            EnumGuiState::EditImage(_) =>
+            EnumGuiState::EditImage(..) =>
                 {
                     self.show_edit_image(ctx, frame);
                 }

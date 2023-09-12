@@ -15,9 +15,9 @@ pub enum EditImageEvent
 }
 
 impl EditImage {
-    pub fn new() -> EditImage{
+    pub fn new(img: Image) -> EditImage{
         EditImage {
-            img: (),
+            img,
         }
     }
     pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame, enabled: bool) -> EditImageEvent {
