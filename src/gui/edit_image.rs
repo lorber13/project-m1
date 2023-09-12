@@ -1,11 +1,13 @@
 use eframe::egui::{CentralPanel, ColorImage, Context, Image, Widget};
 use egui_extras::RetainedImage;
 use image::RgbaImage;
+use std::rc::Rc;
 
 pub struct EditImage
 {
     img: Image
 }
+
 
 pub enum EditImageEvent
 {
@@ -20,7 +22,7 @@ impl EditImage {
             img,
         }
     }
-    pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame, enabled: bool) -> EditImageEvent {
+    pub fn update(self: Rc<Self>, ctx: &Context, _frame: &mut eframe::Frame, enabled: bool) -> EditImageEvent {
         let mut ret = EditImageEvent::Nil;
 
         CentralPanel::default().show(ctx, |ui| {

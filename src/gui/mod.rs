@@ -32,6 +32,7 @@ use image::RgbaImage;
 use crate::gui::loading::show_loading;
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
+use std::rc::Rc;
 
 use crate::screenshot::fullscreen_screenshot;
 
@@ -41,7 +42,7 @@ pub enum EnumGuiState
 {
     MainWindow(MainWindow),
     RectSelection(Option<RectSelection>, Option<Receiver<Result<RgbaImage, &'static str>>>),
-    EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
+    EditImage(Rc<EditImage>, Option<Receiver<Option<PathBuf>>>),
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -116,7 +117,6 @@ impl GlobalGuiState
         let (tx, rx) = channel();
         frame.set_visible(false);
         thread::spawn(move||{
-            thread::sleep(Duration::from_secs(5));
             tx.send(fullscreen_screenshot())
         });
         self.state = EnumGuiState::RectSelection(
@@ -199,17 +199,17 @@ impl GlobalGuiState
 
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::EditImage(ref mut em, ref mut opt_r) = self.state
+        if let EnumGuiState::EditImage(ref em, ref mut opt_r) = self.state
         {
             if let Some(_) = opt_r  //se vero, significa che il file dialog è aperto 
             {
                 self.wait_file_dialog(ctx, frame);
             } else      //se il file dialog non è aperto, aggiorno normalmente la finestra
             {
-                match em.update(ctx, frame, true)
+                match em.clone().update(ctx, frame, true)
                 {
                     EditImageEvent::Saved => self.start_file_dialog(),
-                    EditImageEvent::Aborted => self.switch_to_main_window(),
+                    EditImageEvent::Aborted => {self.current_image = None; self.switch_to_main_window()},
                     EditImageEvent::Nil => ()
                 }
             }
@@ -220,7 +220,7 @@ impl GlobalGuiState
 
     fn wait_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::EditImage(mut em, ref mut opt_rx) = self.state
+        if let EnumGuiState::EditImage(ref em, ref mut opt_rx) = self.state
         {
            if let Some(rx) = opt_rx
            {
@@ -231,18 +231,18 @@ impl GlobalGuiState
                         match pb_opt
                         {
                             Some(pb) => show_loading(ctx),  //TODO: spawnare il thread che effettua il salvataggio
-                            None => self.switch_to_main_window()    //se l'operazione è stata annullata, si torna alla finestra principale
+                            None => {opt_rx.take();}   //se l'operazione è stata annullata, si torna a image editing
                         }
                     },
 
                     Err(TryRecvError::Empty) => {   //in caso non sia ancora stato ricevuto il messaggio, continuo a mostrare la finestra precedente disabilitata
-                        em.update(ctx, frame, false);
+                        em.clone().update(ctx, frame, false);
                     },
 
                     Err(TryRecvError::Disconnected) => {    //in caso il thread sia fallito, segnalo errore e torno a mostrare EditImage
                         opt_rx.take();
                         self.alert.replace("Error in file dialog. Please retry.");
-                        self.state = EnumGuiState::EditImage(em, None);
+                        self.state = EnumGuiState::EditImage(em.clone(), None);
                     }
                 }
            }

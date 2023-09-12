@@ -31,6 +31,8 @@ impl RectSelection {
     pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<RgbaImage> {
         frame.set_fullscreen(true); // todo: should be called once, not every frame
 
+        let mut ret = None;
+
         egui::Area::new("area_1").show(ctx, |ui| {
             let (space, painter) = ui.allocate_painter(
                 Vec2::new(ctx.screen_rect().width(), ctx.screen_rect().height()),
@@ -52,11 +54,7 @@ impl RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        todo!()
-                        //return Some(Rect::from_points(&[
-                        //    self.start_drag_point.unwrap(),
-                        //    space.hover_pos().map(|point| point.round()).expect("error"),
-                        //]));
+                        //ret= Some(()); //TO DO: ritagliare l'immagine
                     }
                     (false, false) => {
                         if let Some(pos1) = self.start_drag_point {
@@ -78,6 +76,6 @@ impl RectSelection {
                 self.start_drag_point = None;
             }
         });
-        None
+        ret
     }
 }
