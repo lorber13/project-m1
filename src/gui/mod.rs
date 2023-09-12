@@ -22,7 +22,7 @@ use main_window::MainWindow;
 use rect_selection::RectSelection;
 use std::fmt::Formatter;
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, SendError, TryRecvError};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -35,11 +35,13 @@ use edit_image::EditImage;
 
 use crate::screenshot::fullscreen_screenshot;
 
+use self::edit_image::EditImageEvent;
+
 pub enum EnumGuiState
 {
     MainWindow(MainWindow),
     RectSelection(Option<RectSelection>, Option<Receiver<Result<RgbaImage, &'static str>>>),
-    FileDialog(Option<Receiver<PathBuf>>),
+    FileDialog(Receiver<Option<PathBuf>>, EditImage),
     EditImage(EditImage)
 
 }
@@ -52,7 +54,7 @@ impl std::fmt::Debug for EnumGuiState
         {
             EnumGuiState::MainWindow(_) => write!(f, "EnumGuiState::MainWindow"),
             EnumGuiState::RectSelection(_, _) => write!(f, "EnumGuiState::RectSelection"),
-            EnumGuiState::FileDialog(_) => { todo!() }
+            EnumGuiState::FileDialog(_) => { write!(f, "EnumGuiState::FileDialog") }
             EnumGuiState::EditImage(_) => write!(f, "EnumGuiState::EditImage")
         }
     }
@@ -135,13 +137,14 @@ impl GlobalGuiState
     //    cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
     //}
 
-    pub fn show_file_dialog(&mut self)
+    pub fn switch_to_file_dialog(&mut self, ei : EditImage) 
     {
-        let wait = thread::spawn(||
-        {
-            file_dialog::show_file_dialog() // -> Option<PathBuf>
-        });
-        self.state = EnumGuiState::FileDialog(wait);
+        let (tx, rx) = channel::<Option<PathBuf>>();
+        std::thread::spawn(move ||
+            {
+                tx.send(file_dialog::show_file_dialog())
+            });
+        self.state = EnumGuiState::FileDialog(rx, ei);
     }
 
     fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -194,7 +197,39 @@ impl GlobalGuiState
 
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
+        if let EnumGuiState::EditImage(ref mut em) = self.state
+        {
+            match em.update(ctx, frame, true)
+            {
+                EditImageEvent::Saved => 
+            }
+        }
+    }
 
+    fn show_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        if let EnumGuiState::FileDialog(rx, ref mut em) = self.state
+        {
+            match rx.try_recv() //controllo se il thread ha già inviato attraverso il canale
+            {
+                Ok(pb_opt) => {   //in caso sia già stato ricevuto un messaggio, esso può essere a sua volta None (se l'utente ha deciso di annullare il salvataggio)
+                    match pb_opt
+                    {
+                        Some(pb) => show_loading(ctx),  //TODO: spawnare il thread che effettua il salvataggio
+                        None => self.switch_to_main_window()    //se l'operazione è stata annullata, si torna alla finestra principale
+                    }
+                }
+
+                Err(TryRecvError::Empty) => {   //in caso non sia ancora stato ricevuto il messaggio, continuo a mostrare la finestra precedente disabilitata
+                    em.update(ctx, frame, false);
+                }
+
+                Err(TryRecvError::Disconnected) => {    //in caso il thread sia fallito, segnalo errore e torno a mostrare EditImage
+                    self.alert.replace("Error in file dialog. Please retry.");
+                    self.state = EnumGuiState::EditImage(em);
+                }
+            }
+        }
     }
     
 }
@@ -232,7 +267,9 @@ impl eframe::App for GlobalGuiState
             EnumGuiState::RectSelection(_, _) => {
                     self.show_rect_selection(ctx, frame);
             },
-            EnumGuiState::FileDialog(_) => { }, // todo
+            EnumGuiState::FileDialog(_) => { 
+                ctx.
+            }, 
             EnumGuiState::EditImage(_) =>
                 {
                     self.show_edit_image(ctx, frame);

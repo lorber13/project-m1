@@ -7,7 +7,7 @@ pub struct EditImage
     img: Image
 }
 
-enum EditImageEvent
+pub enum EditImageEvent
 {
     Saved, // todo: add image object to be returned
     Aborted,
@@ -15,16 +15,17 @@ enum EditImageEvent
 }
 
 impl EditImage {
-    pub fn new() {
+    pub fn new() -> EditImage{
         EditImage {
             img: (),
         }
     }
-    pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) -> EditImageEvent {
+    pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame, enabled: bool) -> EditImageEvent {
         let mut ret = EditImageEvent::Nil;
 
         CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui2|
+            ui.add_enabled_ui(enabled, |ui1|{
+                ui1.horizontal(|ui2|
                     {
                         if ui2.button("Save").clicked()
                         {
@@ -34,8 +35,10 @@ impl EditImage {
                             ret = EditImageEvent::Aborted;
                         }
                     }
-            );
-            self.img.ui(ui);
+                );
+
+                self.img.ui(ui1);
+            });
         });
         ret
     }
