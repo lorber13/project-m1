@@ -6,15 +6,17 @@ use egui_extras::RetainedImage;
 use image::RgbaImage;
 
 pub struct RectSelection {
-    image: RetainedImage,
+    painter_image: RetainedImage,
+    image: RgbaImage,
     start_drag_point: Option<Pos2>,
 }
 
 impl RectSelection {
-    pub fn new(rgba: &RgbaImage) -> Self {
+    pub fn new(rgba: RgbaImage) -> Self {
         if DEBUG {
             let _ = image_coding::copy_to_clipboard(&rgba);
         }
+        // todo: can be replaced with Context::something
         let image = RetainedImage::from_color_image(
             "screenshot_image",
             ColorImage::from_rgba_unmultiplied(
@@ -23,7 +25,8 @@ impl RectSelection {
             ),
         );
         Self {
-            image,
+            painter_image: image,
+            image: rgba,
             start_drag_point: None,
         }
     }
@@ -39,7 +42,7 @@ impl RectSelection {
                 Sense::click_and_drag(),
             );
             painter.image(
-                self.image.texture_id(ctx),
+                self.painter_image.texture_id(ctx),
                 Rect::from_min_max(
                     pos2(0.0, 0.0),
                     pos2(ctx.screen_rect().width(), ctx.screen_rect().height()),
@@ -54,14 +57,35 @@ impl RectSelection {
                         self.start_drag_point = space.hover_pos().map(|point| point.round());
                     }
                     (false, true) => {
-                        //ret= Some(()); //TO DO: ritagliare l'immagine
+                        let rect = Rect::from_points(&[
+                            self.start_drag_point.expect(
+                                "if we are in this state, start_drag_point must be defined",
+                            ),
+                            space
+                                .hover_pos()
+                                .map(|point| point.round())
+                                .expect("same here"),
+                        ]);
+                        ret = Some(
+                            image::imageops::crop(
+                                &mut self.image,
+                                rect.left_top().x as u32,
+                                rect.left_top().y as u32,
+                                rect.width() as u32,
+                                rect.height() as u32,
+                            )
+                            .to_image(),
+                        );
                     }
                     (false, false) => {
                         if let Some(pos1) = self.start_drag_point {
                             painter.rect(
                                 Rect::from_points(&[
                                     pos1,
-                                    space.hover_pos().map(|point| point.round()).expect("error"),
+                                    space
+                                        .hover_pos()
+                                        .map(|point| point.round())
+                                        .expect("same here"),
                                 ]),
                                 Rounding::none(),
                                 Color32::from_white_alpha(30),
