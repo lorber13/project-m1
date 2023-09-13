@@ -176,7 +176,7 @@ impl GlobalGuiState
                     frame.set_visible(true);
                     match msg {
                         Ok(img) => {
-                            let rs = RectSelection::new(&img);
+                            let rs = RectSelection::new(img, ctx);
                             self.state = EnumGuiState::RectSelection(Some(rs), None);
                         }
                         Err(error_message) => {
@@ -275,7 +275,6 @@ impl eframe::App for GlobalGuiState
         if crate::DEBUG {println!("state = {:?}", self.state);}
 
 
-        // todo move the code in a dedicated function
         match &mut self.state
         {
             EnumGuiState::MainWindow(_) => {

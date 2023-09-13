@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use eframe::egui::{CentralPanel, ColorImage, Context, TextureHandle};
 use image::RgbaImage;
 
@@ -27,7 +28,7 @@ impl EditImage {
         }
     }
     pub fn update(
-        &mut self,
+        self: Rc<Self>,
         ctx: &Context,
         _frame: &mut eframe::Frame,
         enabled: bool,
