@@ -1,31 +1,30 @@
 use crate::{image_coding, DEBUG};
 
 use eframe::egui;
+use eframe::egui::TextureHandle;
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
-use egui_extras::RetainedImage;
 use image::RgbaImage;
 
 pub struct RectSelection {
-    painter_image: RetainedImage,
+    texture_handle: TextureHandle,
     image: RgbaImage,
     start_drag_point: Option<Pos2>,
 }
 
 impl RectSelection {
-    pub fn new(rgba: RgbaImage) -> Self {
+    pub fn new(rgba: RgbaImage, ctx: &egui::Context) -> Self {
         if DEBUG {
             let _ = image_coding::copy_to_clipboard(&rgba);
         }
-        // todo: can be replaced with Context::something
-        let image = RetainedImage::from_color_image(
-            "screenshot_image",
-            ColorImage::from_rgba_unmultiplied(
-                [rgba.width() as usize, rgba.height() as usize],
-                &rgba,
+        RectSelection {
+            texture_handle: ctx.load_texture(
+                "screenshot_image",
+                ColorImage::from_rgba_unmultiplied(
+                    [rgba.width() as usize, rgba.height() as usize],
+                    rgba.as_raw(),
+                ),
+                Default::default(),
             ),
-        );
-        Self {
-            painter_image: image,
             image: rgba,
             start_drag_point: None,
         }
@@ -42,7 +41,7 @@ impl RectSelection {
                 Sense::click_and_drag(),
             );
             painter.image(
-                self.painter_image.texture_id(ctx),
+                self.texture_handle.id(),
                 Rect::from_min_max(
                     pos2(0.0, 0.0),
                     pos2(ctx.screen_rect().width(), ctx.screen_rect().height()),
