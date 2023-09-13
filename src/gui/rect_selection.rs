@@ -1,34 +1,41 @@
 use crate::{image_coding, DEBUG};
 
 use eframe::egui;
+use eframe::egui::{Context, TextureHandle};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
-use egui_extras::RetainedImage;
 use image::RgbaImage;
 
 pub struct RectSelection {
-    image: RetainedImage,
+    texture_handle: TextureHandle,
     start_drag_point: Option<Pos2>,
+    rgba: RgbaImage,
 }
 
 impl RectSelection {
-    pub fn new(rgba: &RgbaImage) -> Self {
+    pub fn new(rgba: RgbaImage, ctx: &Context) -> Self {
         if DEBUG {
             let _ = image_coding::copy_to_clipboard(&rgba);
         }
-        let image = RetainedImage::from_color_image(
-            "screenshot_image",
-            ColorImage::from_rgba_unmultiplied(
-                [rgba.width() as usize, rgba.height() as usize],
-                &rgba,
+
+        RectSelection {
+            texture_handle: ctx.load_texture(
+                "screenshot_image",
+                ColorImage::from_rgba_unmultiplied(
+                    [rgba.width() as usize, rgba.height() as usize],
+                    rgba.as_raw(),
+                ),
+                Default::default(),
             ),
-        );
-        Self {
-            image,
+            rgba,
             start_drag_point: None,
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<Rect> {
+    pub fn update(
+        &mut self,
+        ctx: &Context,
+        frame: &mut eframe::Frame,
+    ) -> Option<(Rect, RgbaImage)> {
         frame.set_fullscreen(true); // todo: should be called once, not every frame
 
         let mut ret = None;
@@ -39,7 +46,7 @@ impl RectSelection {
                 Sense::click_and_drag(),
             );
             painter.image(
-                self.image.texture_id(ctx),
+                self.texture_handle.id(),
                 Rect::from_min_max(
                     pos2(0.0, 0.0),
                     pos2(ctx.screen_rect().width(), ctx.screen_rect().height()),
@@ -56,10 +63,16 @@ impl RectSelection {
                     (false, true) => {
                         if let Some(pos1) = self.start_drag_point {
                             ret = Some(
-                                Rect::from_points(&[
-                                    pos1,
-                                    space.hover_pos().map(|point| point.round()).expect("error"),
-                                ])
+                                (
+                                    Rect::from_points(&[
+                                        pos1,
+                                        space
+                                            .hover_pos()
+                                            .map(|point| point.round())
+                                            .expect("error"),
+                                    ]),
+                                    self.rgba.clone(),
+                                ), // todo: ugly clone
                             );
                         }
                     }
@@ -71,7 +84,7 @@ impl RectSelection {
                                     space.hover_pos().map(|point| point.round()).expect("error"),
                                 ]),
                                 Rounding::none(),
-                                Color32::from_white_alpha(30),
+                                Color32::from_white_alpha(30), // todo: should be the opposite
                                 Stroke::NONE,
                             )
                         }
