@@ -33,6 +33,7 @@ use crate::gui::loading::show_loading;
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
 use std::rc::Rc;
+use egui::Rect;
 
 use crate::screenshot::fullscreen_screenshot;
 
@@ -42,7 +43,7 @@ pub enum EnumGuiState
 {
     MainWindow(MainWindow),
     RectSelection(Option<RectSelection>, Option<Receiver<Result<RgbaImage, &'static str>>>),
-    EditImage(Rc<EditImage>, Option<Receiver<Option<PathBuf>>>),
+    EditImage(Option<EditImage>, Option<Receiver<RgbaImage>>, Option<Receiver<Option<PathBuf>>>),
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -107,12 +108,12 @@ impl GlobalGuiState
         }
     }
 
-    pub fn switch_to_main_window(&mut self)
+    fn switch_to_main_window(&mut self)
     {
         self.state = EnumGuiState::MainWindow(MainWindow::new());
     }
 
-    pub fn switch_to_rect_selection(&mut self, frame: &mut eframe::Frame)
+    fn switch_to_rect_selection(&mut self, frame: &mut eframe::Frame)
     {
         let (tx, rx) = channel();
         frame.set_visible(false);
@@ -123,6 +124,24 @@ impl GlobalGuiState
             None,
             Some(rx)
         );
+    }
+
+    //uso il rettangolo per ritagliare l'immagine precedentemente salvata
+    //un thread worker esegue il task, mentre la gui mostrerà la schermata di caricamento
+    fn switch_to_edit_image(&mut self, rect: Rect)
+    {
+        let (tx, rx) = channel();
+        let img = self.current_image.unwrap().clone();
+        std::thread::spawn(move||
+            {
+                let crop_img = image::imageops::crop_imm::<RgbaImage>(&img, 
+                                                                            rect.left() as u32, 
+                                                                            rect.top() as u32, 
+                                                                            rect.width() as u32, 
+                                                                            rect.height() as u32).to_image();
+                tx.send(crop_img);
+            });
+        self.state = EnumGuiState::EditImage(None, Some(rx), None);
     }
 
     //pub fn switch_to_none(&mut self)
@@ -169,27 +188,37 @@ impl GlobalGuiState
     {
         if let EnumGuiState::RectSelection(opt_rs, opt_r) = &mut self.state
         {
+            //controllo se sono in stato di loading, lo stato di loading è segnalato da Some(Receiver) nel secondo campo della tupla
             if let Some(r) = opt_r
             {
-                if let Ok(msg) = r.try_recv()
+                //se sono in stato di attesa, controllo se il thread worker ha inviato sul canale
+                match r.try_recv()
                 {
-                    frame.set_visible(true);
-                    match msg {
-                        Ok(img) => {
-                            let rs = RectSelection::new(img, ctx);
-                            self.state = EnumGuiState::RectSelection(Some(rs), None);
+                    //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
+                    Ok(msg) =>
+                    {
+                        frame.set_visible(true);
+                        match msg {
+                            Ok(img) => {
+                                let rs = RectSelection::new(&img);
+                                self.current_image = Some(img.clone());     //viene salvata l'immagine che sarà ritagliata successivatemte (quando rect selection ritornerà un rettangolo)
+                                self.state = EnumGuiState::RectSelection(Some(rs), None);
+                            }
+                            Err(error_message) => {
+                                self.alert = Some(error_message)
+                            }
                         }
-                        Err(error_message) => {
-                            self.alert = Some(error_message)
-                        }
-                    }
-                } else {
-                    show_loading(ctx);
+                    },
+
+                    Err(TryRecvError::Disconnected) => {self.alert.replace("An error occoured when trying to start the service. Please retry.");},
+                    Err(TryRecvError::Empty) => loading::show_loading(ctx)
                 }
-            } else if let Some(ref mut rs) = opt_rs
+                    
+            } //se non sono in stato di attesa, mostro la schermata di rect selection
+            else if let Some(ref mut rs) = opt_rs
             {
-                if let Some(screenshot) = rs.update(ctx, frame) {
-                    self.current_image = Some(screenshot);
+                if let Some(rect) = rs.update(ctx, frame) {
+                    self.switch_to_edit_image(rect);
                 };
             } else {
                 unreachable!();
@@ -199,18 +228,30 @@ impl GlobalGuiState
 
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::EditImage(ref em, ref mut opt_r) = self.state
+        match self.state
         {
-            if let Some(_) = opt_r  //se vero, significa che il file dialog è aperto 
+            EnumGuiState::EditImage(Some(ref mut em),None , None) => //non c'è attesa su nessun canale: aggiorno normalmente la finestra
             {
-                self.wait_file_dialog(ctx, frame);
-            } else      //se il file dialog non è aperto, aggiorno normalmente la finestra
-            {
-                match em.clone().update(ctx, frame, true)
+                match em.update(ctx, frame, true)
                 {
                     EditImageEvent::Saved => self.start_file_dialog(),
                     EditImageEvent::Aborted => {self.current_image = None; self.switch_to_main_window()},
                     EditImageEvent::Nil => ()
+                }
+            }
+            EnumGuiState::EditImage(Some(em), None , Some(r)) => //il file dialog è aperto
+            {
+                self.wait_file_dialog(ctx, frame);
+            },
+            EnumGuiState::EditImage(None, Some(r), None) => //attesa dell'immagine da caricare
+            {
+                match r.try_recv()
+                {
+                    Ok(img) => 
+                    {
+                        self.current_image.replace(img.clone());
+                        let em = EditImage::new(egui::Image::from_rgba_unmultiplied(img));
+                    }
                 }
             }
 
@@ -275,6 +316,7 @@ impl eframe::App for GlobalGuiState
         if crate::DEBUG {println!("state = {:?}", self.state);}
 
 
+        // todo move the code in a dedicated function
         match &mut self.state
         {
             EnumGuiState::MainWindow(_) => {
