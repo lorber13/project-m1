@@ -144,8 +144,9 @@ impl GlobalGuiState
 
     fn switch_to_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        frame.set_decorations(false);
-        frame.set_window_size(Vec2::new(0.0, 0.0));
+        //frame.set_decorations(false);
+        //frame.set_window_size(Vec2::new(0.0, 0.0));
+        frame.set_visible(false);
         self.state = EnumGuiState::LoadingRectSelection(None);
     }
 
@@ -170,12 +171,13 @@ impl GlobalGuiState
                     //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
                     Ok(msg) =>
                     {
+                        frame.set_visible(true);
                         frame.set_fullscreen(true);
                         match msg {
                             Ok(img) => {
                                 let rs = RectSelection::new(img, ctx);
                                 self.state = EnumGuiState::RectSelection(rs);
-                                ctx.request_repaint(); //necessario per rendere dinuovo il frame visibile (dopo averlo reso invisibile)
+                                //ctx.request_repaint(); //necessario per rendere dinuovo il frame visibile (dopo averlo reso invisibile)
                             }
                             Err(error_message) => {
                                 self.alert = Some(error_message)
@@ -239,8 +241,9 @@ impl GlobalGuiState
             self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else
         {
-            frame.set_decorations(false);
-            frame.set_window_size(Vec2::new(0.0, 0.0));
+            //frame.set_decorations(false);
+            //frame.set_window_size(Vec2::new(0.0, 0.0));
+            frame.set_visible(false);
             self.state = EnumGuiState::LoadingEditImage(None);
         }
         
@@ -268,9 +271,10 @@ impl GlobalGuiState
                     if DEBUG {copy_to_clipboard(&img);}
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
-                    frame.set_decorations(true);
-                    frame.set_maximized(true);
-                    ctx.request_repaint();
+                    frame.set_visible(true);
+                    //frame.set_decorations(true);
+                    //frame.set_maximized(true);
+                    //ctx.request_repaint();
                     self.state = EnumGuiState::EditImage(em, None);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
