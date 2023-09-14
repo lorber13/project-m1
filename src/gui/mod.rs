@@ -204,7 +204,7 @@ impl GlobalGuiState
     {
         if let EnumGuiState::RectSelection(ref mut rs) = self.state
         {
-            if let Some((rect, rgba)) = rs.update(ctx, frame) {
+            if let Some((rect, rgba)) = rs.update(ctx) {
                 self.switch_to_edit_image(Some((rect, rgba)), ctx, frame);
             }
         }else {unreachable!();}

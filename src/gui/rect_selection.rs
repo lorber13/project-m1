@@ -34,10 +34,7 @@ impl RectSelection {
     pub fn update(
         &mut self,
         ctx: &Context,
-        frame: &mut eframe::Frame,
     ) -> Option<(Rect, RgbaImage)> {
-        frame.set_fullscreen(true); // todo: should be called once, not every frame
-
         let mut ret = None;
 
         egui::Area::new("area_1").show(ctx, |ui| {
