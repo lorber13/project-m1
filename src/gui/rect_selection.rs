@@ -61,13 +61,22 @@ impl RectSelection {
                         self.start_drag_point = space.hover_pos();
                     }
                     (false, true) => {
-                        if let Some(pos1) = self.start_drag_point {
+                        if let Some(pos) = self.start_drag_point {
                             ret = Some(
                                 (
                                     Rect::from_points(&[
-                                        pos1,
+                                        pos2(
+                                            pos.x * ctx.pixels_per_point(),
+                                            pos.y * ctx.pixels_per_point(),
+                                        ),
                                         space
                                             .hover_pos()
+                                            .map(|pos| {
+                                                pos2(
+                                                    pos.x * ctx.pixels_per_point(),
+                                                    pos.y * ctx.pixels_per_point(),
+                                                )
+                                            })
                                             .expect("error"),
                                     ]),
                                     self.rgba.clone(),
@@ -76,12 +85,9 @@ impl RectSelection {
                         }
                     }
                     (false, false) => {
-                        if let Some(pos1) = self.start_drag_point {
+                        if let Some(pos) = self.start_drag_point {
                             painter.rect(
-                                Rect::from_points(&[
-                                    pos1,
-                                    space.hover_pos().expect("error"),
-                                ]),
+                                Rect::from_points(&[pos, space.hover_pos().expect("error")]),
                                 Rounding::none(),
                                 Color32::from_white_alpha(30), // todo: should be the opposite
                                 Stroke::NONE,
