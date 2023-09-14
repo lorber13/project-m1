@@ -1,5 +1,5 @@
 use crate::image_coding::ImageFormat;
-use eframe::egui::{CentralPanel, ColorImage, Context, Sense, TextureHandle, ScrollArea};
+use eframe::egui::{CentralPanel, ColorImage, Context, Sense, TextureHandle, ScrollArea, Vec2};
 use image::RgbaImage;
 
 pub struct EditImage {
@@ -53,7 +53,7 @@ impl EditImage {
                         ui.set_max_height(30.0);
                     });
                     let (response, painter) =
-                        ui.allocate_painter(self.texture_handle.size_vec2(), Sense::click_and_drag());
+                        ui.allocate_painter(Vec2::from([0.0,0.0]), Sense::click_and_drag());
                     ui.image(self.texture_handle.id(), self.texture_handle.size_vec2());
                 })
             
