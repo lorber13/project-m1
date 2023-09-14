@@ -5,7 +5,7 @@ mod itc;
 mod screenshot;
 mod head_thread;
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 fn main()
 {
     gui::launch_gui();

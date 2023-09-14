@@ -13,8 +13,3 @@ pub fn fullscreen_screenshot() -> Result<RgbaImage, &'static str>
     }
     
 }
-
-pub fn rect_screenshot() // -> Result<RetainedImage, &'static str>
-{
-    //TO DO
-}

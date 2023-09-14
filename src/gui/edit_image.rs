@@ -1,5 +1,5 @@
 use crate::image_coding::ImageFormat;
-use eframe::egui::{CentralPanel, ColorImage, Context, Sense, TextureHandle};
+use eframe::egui::{CentralPanel, ColorImage, Context, Sense, TextureHandle, ScrollArea};
 use image::RgbaImage;
 
 pub struct EditImage {
@@ -39,20 +39,24 @@ impl EditImage {
         let mut ret = EditImageEvent::Nil;
 
         CentralPanel::default().show(ctx, |ui| {
-            ui.add_enabled_ui(enabled, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Save").clicked() {
-                        ret = EditImageEvent::Saved {
-                            image: self.image.clone(), // todo: ugly clone
-                            format: ImageFormat::Png,  // todo: should be a state
-                        };
-                    } else if ui.button("Abort").clicked() {
-                        ret = EditImageEvent::Aborted;
-                    }
-                });
-                let (response, painter) =
-                    ui.allocate_painter(self.texture_handle.size_vec2(), Sense::click_and_drag());
-                ui.image(self.texture_handle.id(), self.texture_handle.size_vec2());
+            ScrollArea::both().show(ui, |ui|{
+                ui.add_enabled_ui(enabled, |ui| {
+                    ui.horizontal_top(|ui| {
+                        if ui.button("Save").clicked() {
+                            ret = EditImageEvent::Saved {
+                                image: self.image.clone(), // todo: ugly clone
+                                format: ImageFormat::Png,  // todo: should be a state
+                            };
+                        } else if ui.button("Abort").clicked() {
+                            ret = EditImageEvent::Aborted;
+                        }
+                        ui.set_max_height(30.0);
+                    });
+                    let (response, painter) =
+                        ui.allocate_painter(self.texture_handle.size_vec2(), Sense::click_and_drag());
+                    ui.image(self.texture_handle.id(), self.texture_handle.size_vec2());
+                })
+            
             });
         });
         ret
