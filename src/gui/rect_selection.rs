@@ -58,7 +58,7 @@ impl RectSelection {
             if !space.clicked() {
                 match (space.drag_started(), space.drag_released()) {
                     (true, false) => {
-                        self.start_drag_point = space.hover_pos().map(|point| point.round());
+                        self.start_drag_point = space.hover_pos();
                     }
                     (false, true) => {
                         if let Some(pos1) = self.start_drag_point {
@@ -68,7 +68,6 @@ impl RectSelection {
                                         pos1,
                                         space
                                             .hover_pos()
-                                            .map(|point| point.round())
                                             .expect("error"),
                                     ]),
                                     self.rgba.clone(),
@@ -81,7 +80,7 @@ impl RectSelection {
                             painter.rect(
                                 Rect::from_points(&[
                                     pos1,
-                                    space.hover_pos().map(|point| point.round()).expect("error"),
+                                    space.hover_pos().expect("error"),
                                 ]),
                                 Rounding::none(),
                                 Color32::from_white_alpha(30), // todo: should be the opposite
