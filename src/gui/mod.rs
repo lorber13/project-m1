@@ -19,19 +19,23 @@ mod edit_image;
 
 use eframe::egui;
 use eframe::egui::Vec2;
+use eframe::epaint::mutex::Mutex;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
+use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::path::PathBuf;
+use std::sync::Condvar;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 use eframe::egui::Rect;
-use image::RgbaImage;
-use crate::DEBUG;
+use image::{RgbaImage, ImageError};
+use crate::{DEBUG, image_coding};
 use crate::gui::loading::show_loading;
-use crate::image_coding::copy_to_clipboard;
+use crate::image_coding::{copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
+use std::rc::Rc;
 
 use crate::screenshot::fullscreen_screenshot;
 
@@ -44,6 +48,7 @@ pub enum EnumGuiState
     RectSelection(RectSelection),
     LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
     EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
+    Saving(Receiver<Result<(), ImageError>>)
 }
 
 impl std::fmt::Debug for EnumGuiState
@@ -57,6 +62,7 @@ impl std::fmt::Debug for EnumGuiState
             EnumGuiState::RectSelection(..) => write!(f, "EnumGuiState::RectSelection"),
             EnumGuiState::EditImage(..) => write!(f, "EnumGuiState::EditImage"),
             EnumGuiState::LoadingEditImage(_) => write!(f, "EnumGuiState::LoadingEdiImage"),
+            EnumGuiState::Saving(_) => write!(f, "EnumGuiState::Start")
         }
     }
 }
@@ -81,7 +87,8 @@ impl Clone for EnumGuiState
 pub struct GlobalGuiState
 {
     state: EnumGuiState,
-    alert: Option<&'static str>
+    alert: Option<&'static str>,
+    save_request: Option<(RgbaImage, ImageFormat)>
 }
 
 /*
@@ -104,7 +111,8 @@ impl GlobalGuiState
     {
         GlobalGuiState {
             state: EnumGuiState::MainWindow(MainWindow::new()),
-            alert: None
+            alert: None,
+            save_request: None
         }
     }
 
@@ -144,9 +152,11 @@ impl GlobalGuiState
 
     fn switch_to_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        //frame.set_decorations(false);
-        //frame.set_window_size(Vec2::new(0.0, 0.0));
-        frame.set_visible(false);
+        frame.set_window_size(Vec2::ZERO);
+        frame.set_decorations(false);
+        //ctx.clear_animations();
+        ctx.request_repaint();
+        
         self.state = EnumGuiState::LoadingRectSelection(None);
     }
 
@@ -156,11 +166,16 @@ impl GlobalGuiState
         {
             EnumGuiState::LoadingRectSelection(None) => //il thread non è ancora stato spawnato
             {
-                let (tx, rx) = channel();
-                thread::spawn(move||{
-                    tx.send(fullscreen_screenshot());
-                });
-                self.state = EnumGuiState::LoadingRectSelection(Some(rx));
+                if frame.info().window_info.size.x == 0.0 
+                {
+                    let (tx, rx) = channel();
+                    thread::spawn(move||{
+
+                        tx.send(fullscreen_screenshot());
+                    });
+                    self.state = EnumGuiState::LoadingRectSelection(Some(rx));
+                }
+                
             },
 
             EnumGuiState::LoadingRectSelection(Some(r)) => //in attesa che il thread invii l'immmagine
@@ -171,8 +186,8 @@ impl GlobalGuiState
                     //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
                     Ok(msg) =>
                     {
-                        frame.set_visible(true);
                         frame.set_fullscreen(true);
+                        ctx.request_repaint();
                         match msg {
                             Ok(img) => {
                                 let rs = RectSelection::new(img, ctx);
@@ -241,9 +256,9 @@ impl GlobalGuiState
             self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else
         {
-            //frame.set_decorations(false);
-            //frame.set_window_size(Vec2::new(0.0, 0.0));
-            frame.set_visible(false);
+            frame.set_decorations(false);
+            frame.set_window_size(Vec2::ZERO);
+            ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(None);
         }
         
@@ -271,10 +286,10 @@ impl GlobalGuiState
                     if DEBUG {copy_to_clipboard(&img);}
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
-                    frame.set_visible(true);
+                    frame.set_decorations(true);
                     //frame.set_decorations(true);
-                    //frame.set_maximized(true);
-                    //ctx.request_repaint();
+                    frame.set_maximized(true);
+                    ctx.request_repaint();
                     self.state = EnumGuiState::EditImage(em, None);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
@@ -291,6 +306,8 @@ impl GlobalGuiState
         }else {unreachable!();}
     }
 
+
+
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
         match &mut self.state
@@ -300,7 +317,11 @@ impl GlobalGuiState
                 match em.update(ctx, frame, true)
                 {
                     // todo: manage different formats
-                    EditImageEvent::Saved {..} => self.start_file_dialog(),
+                    EditImageEvent::Saved {image, format} => 
+                    {
+                        self.save_request = Some((image, format));
+                        self.start_file_dialog()
+                    },
                     EditImageEvent::Aborted => { self.switch_to_main_window()},
                     EditImageEvent::Nil => ()
                 }
@@ -327,7 +348,13 @@ impl GlobalGuiState
                         *opt_rx = None;
                         match pb_opt
                         {
-                            Some(pb) => show_loading(ctx),  //TODO: spawnare il thread che effettua il salvataggio
+                            Some(pb) => 
+                            {
+                                let rq = self.save_request.take().expect("self.save_request must not be empty");
+                                let file_output = pb.with_extension::<&'static str>(rq.1.into());
+                                let rx = image_coding::start_thread_save_image(file_output, rq.0);
+                                self.state = EnumGuiState::Saving(rx);
+                            },
                             None => { *opt_rx = None; }   //se l'operazione è stata annullata, si torna a image editing
                         }
                     },
@@ -358,6 +385,27 @@ impl GlobalGuiState
             *r_opt = Some(rx);
         }
         
+    }
+
+
+
+
+    //----------------------SAVING --------------------------------------------------
+    fn show_saving(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        if let EnumGuiState::Saving(rx) = &mut self.state
+        {
+            match rx.try_recv()
+            {
+                Ok(Ok(res)) =>
+                {
+                    self.alert.replace("Image saved!");
+                    self.switch_to_main_window();
+                },
+                Err (TryRecvError::Empty) => show_loading(ctx),
+                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Error: image not saved"); self.switch_to_main_window();}
+            }
+        }else {unreachable!();}
     }
     
 }
@@ -404,7 +452,12 @@ impl eframe::App for GlobalGuiState
             EnumGuiState::EditImage(..) =>
                 {
                     self.show_edit_image(ctx, frame);
-                }
+                },
+            EnumGuiState::Saving(..) =>
+            {
+                self.show_saving(ctx, frame);
+            }
+            
         }
     }
 }

@@ -1,6 +1,8 @@
 
 use arboard::{Clipboard, ImageData};
 use image::{RgbaImage, ImageError};
+use std::rc::Rc;
+use std::sync::mpsc::{Sender, Receiver, channel};
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -39,8 +41,18 @@ pub fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>
 }
 
 
+pub fn start_thread_save_image(file_output: std::path::PathBuf, img: RgbaImage) -> Receiver<image::ImageResult<()>>
+{
+    let (tx, rx ) = channel();
+    std::thread::spawn(move || 
+    {
+        tx.send(save_image(file_output, img));
+    });
+    rx
+}
 
-pub fn save_image(file_output: &std::path::Path, img: RgbaImage) -> image::ImageResult<()>
+
+fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageResult<()>
 {
     if let Some(ext) = file_output.extension()
     {

@@ -1,6 +1,7 @@
 use crate::image_coding::ImageFormat;
 use eframe::egui::{CentralPanel, ColorImage, Context, Sense, TextureHandle, ScrollArea, Vec2};
 use image::RgbaImage;
+use std::rc::Rc;
 
 pub struct EditImage {
     image: RgbaImage,
