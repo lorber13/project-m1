@@ -4,7 +4,7 @@ use image::{RgbaImage, ImageError};
 use std::rc::Rc;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ImageFormat { //Enum per selezione del formato
     Png,

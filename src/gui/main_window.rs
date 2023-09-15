@@ -48,18 +48,7 @@ impl MainWindow{
                         ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                     });
                     ui.end_row();
-                    ui.separator();
 
-                egui::ComboBox::from_label("Choose the format desired:") //menù a tendina per la scelta del formato di output
-                    .selected_text(format!("{:?}", self.output_format ))
-                    .show_ui(ui, |ui|{
-                        ui.style_mut().wrap = Some(false);
-                        ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::Png, "Png");
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::JPEG, "JPEG");
-                        ui.selectable_value(&mut self.output_format, image_coding::ImageFormat::GIF, "GIF");
-                    });
-                    ui.end_row();
                 ui.separator();
                 
                 // gestione della pressione del pulsante "Acquire"

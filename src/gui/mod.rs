@@ -319,8 +319,8 @@ impl GlobalGuiState
                     // todo: manage different formats
                     EditImageEvent::Saved {image, format} => 
                     {
-                        self.save_request = Some((image, format));
-                        self.start_file_dialog()
+                        self.save_request = Some((image, format.clone()));
+                        self.start_file_dialog(format)
                     },
                     EditImageEvent::Aborted => { self.switch_to_main_window()},
                     EditImageEvent::Nil => ()
@@ -372,12 +372,12 @@ impl GlobalGuiState
         }
     }
 
-    pub fn start_file_dialog(&mut self) 
+    pub fn start_file_dialog(&mut self, format: ImageFormat) 
     {
         let (tx, rx) = channel::<Option<PathBuf>>();
         std::thread::spawn(move ||
             {
-                tx.send(file_dialog::show_file_dialog())
+                tx.send(file_dialog::show_file_dialog(format))
             });
 
         if let EnumGuiState::EditImage(_, ref mut r_opt ) = self.state
