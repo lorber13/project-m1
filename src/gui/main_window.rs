@@ -11,22 +11,28 @@ use std::io::Write;
 use std::sync::mpsc::Sender;
 use eframe::egui::ColorImage;
 
+#[derive(Clone, Copy)]
+pub struct Delay {
+    pub delayed: bool,
+    pub scalar: f64,
+}
+
 
 
 
 pub struct MainWindow {
-    output_format: image_coding::ImageFormat,
     area: ScreenshotDim,
+    delay: Delay
 }
 impl MainWindow{
     pub fn new() -> Self {
         Self {
-            output_format: image_coding::ImageFormat::Png,
             area: ScreenshotDim::Fullscreen,
+            delay: Delay{delayed: false, scalar: 0.0 }
         }
     }
 
-    pub fn update(&mut self, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, usize)> {
+    pub fn update(&mut self, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, Delay)> {
 
         let mut ret = None;
 
@@ -82,12 +88,19 @@ impl MainWindow{
                     ui.end_row();
 
                 ui.separator();
+
+                ui.add(egui::Checkbox::new(&mut self.delay.delayed, "Timer"));
+                if self.delay.delayed {
+                    ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
+                }
+
+                ui.end_row();
                 
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
-                    ret = Some((self.area.clone(), screens_manager.curr_screen_index));
+                    ret = Some((self.area.clone(), self.delay));
                 }
             });
         ret

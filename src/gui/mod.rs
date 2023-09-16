@@ -35,7 +35,7 @@ use crate::gui::loading::show_loading;
 use crate::image_coding::{copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
-
+use core::time::Duration;
 use self::edit_image::EditImageEvent;
 
 pub enum EnumGuiState
@@ -132,8 +132,11 @@ impl GlobalGuiState
     fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::MainWindow(ref mut mw) = self.state
             {
-                if let Some((request, screen_id)) = mw.update(&mut self.screens_manger, ctx, frame) {
-                    match request {
+                if let Some((area, delay)) = mw.update(&mut self.screens_manger, ctx, frame) {
+                    if delay.delayed {
+                        thread::sleep(Duration::from_secs_f64(delay.scalar.clone()));
+                    }
+                    match area {
                         ScreenshotDim::Fullscreen => {
                             self.switch_to_edit_image(None, ctx, frame);
                         }
