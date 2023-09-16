@@ -88,7 +88,8 @@ pub struct GlobalGuiState
 {
     state: EnumGuiState,
     alert: Option<&'static str>,
-    save_request: Option<(RgbaImage, ImageFormat)>
+    save_request: Option<(RgbaImage, ImageFormat)>,
+    screen_id: u32
 }
 
 /*
@@ -112,7 +113,8 @@ impl GlobalGuiState
         GlobalGuiState {
             state: EnumGuiState::MainWindow(MainWindow::new()),
             alert: None,
-            save_request: None
+            save_request: None,
+            screen_id: crate::screenshot::get_main_screen_id()
         }
     }
 
@@ -122,15 +124,21 @@ impl GlobalGuiState
 
     /*----------------MAIN WINDOW------------------------------------------ */
 
-    fn switch_to_main_window(&mut self)
+    fn switch_to_main_window(&mut self,  _frame: &mut eframe::Frame)
     {
+        _frame.set_decorations(true);
+        _frame.set_fullscreen(false);
+        _frame.set_maximized(false);
+        _frame.set_window_size(egui::Vec2::new(500.0, 300.0));
+        _frame.set_visible(true);
         self.state = EnumGuiState::MainWindow(MainWindow::new());
     }
 
     fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::MainWindow(ref mut mw) = self.state
             {
-                if let Some(request) = mw.update(ctx, frame) {
+                if let Some((request, screen_id)) = mw.update(ctx, frame) {
+                    self.screen_id = screen_id;
                     match request {
                         ScreenshotDim::Fullscreen => {
                             self.switch_to_edit_image(None, ctx, frame);
@@ -153,7 +161,6 @@ impl GlobalGuiState
     fn switch_to_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
         frame.set_visible(false);
-        //ctx.clear_animations();
         ctx.request_repaint();
         
         self.state = EnumGuiState::LoadingRectSelection(None);
@@ -166,9 +173,10 @@ impl GlobalGuiState
             EnumGuiState::LoadingRectSelection(None) => //il thread non è ancora stato spawnato
             {
                 let (tx, rx) = channel();
+                let screen_id = self.screen_id;
                     thread::spawn(move||{
 
-                        tx.send(fullscreen_screenshot());
+                        tx.send(fullscreen_screenshot(screen_id));
                     });
                     self.state = EnumGuiState::LoadingRectSelection(Some(rx));
                 
@@ -200,7 +208,7 @@ impl GlobalGuiState
                     Err(TryRecvError::Disconnected) => {
                         frame.set_visible(true);
                         self.alert.replace("An error occoured when trying to start the service. Please retry.");
-                        self.switch_to_main_window();
+                        self.switch_to_main_window(frame);
                     },
                     Err(TryRecvError::Empty) => show_loading(ctx)
                 }
@@ -287,14 +295,15 @@ impl GlobalGuiState
                     self.state = EnumGuiState::EditImage(em, None);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
-                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Unable to load the image. please retry"); self.switch_to_main_window();}
+                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Unable to load the image. please retry"); self.switch_to_main_window(frame);}
             }
         }else if let EnumGuiState::LoadingEditImage(None) = &mut self.state
         {
             let (tx, rx) = channel();
+            let screen_id = self.screen_id;
             thread::spawn(move||
                 {
-                    tx.send(fullscreen_screenshot());
+                    tx.send(fullscreen_screenshot(screen_id));
                 });
             self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else {unreachable!();}
@@ -316,7 +325,7 @@ impl GlobalGuiState
                         self.save_request = Some((image, format.clone()));
                         self.start_file_dialog(format)
                     },
-                    EditImageEvent::Aborted => { self.switch_to_main_window()},
+                    EditImageEvent::Aborted => { self.switch_to_main_window(frame)},
                     EditImageEvent::Nil => ()
                 }
             }
@@ -394,10 +403,10 @@ impl GlobalGuiState
                 Ok(Ok(res)) =>
                 {
                     self.alert.replace("Image saved!");
-                    self.switch_to_main_window();
+                    self.switch_to_main_window(frame);
                 },
                 Err (TryRecvError::Empty) => show_loading(ctx),
-                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Error: image not saved"); self.switch_to_main_window();}
+                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Error: image not saved"); self.switch_to_main_window(frame);}
             }
         }else {unreachable!();}
     }
