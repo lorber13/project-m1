@@ -60,7 +60,7 @@ impl MainWindow{
                         for (i, s) in screens_manager.screens.iter().enumerate()
                             {
                                 let di = s.0.display_info;
-                                    let str = format!("{} ({}x{}) id({})", i, di.width, di.height, di.id);
+                                    let str = format!("({}x{})", di.width, di.height);
                                     
                                     ui.horizontal(|ui|
                                     {
