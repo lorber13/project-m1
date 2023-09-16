@@ -152,8 +152,7 @@ impl GlobalGuiState
 
     fn switch_to_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        frame.set_window_size(Vec2::ZERO);
-        frame.set_decorations(false);
+        frame.set_visible(false);
         //ctx.clear_animations();
         ctx.request_repaint();
         
@@ -166,15 +165,12 @@ impl GlobalGuiState
         {
             EnumGuiState::LoadingRectSelection(None) => //il thread non è ancora stato spawnato
             {
-                if frame.info().window_info.size.x == 0.0 
-                {
-                    let (tx, rx) = channel();
+                let (tx, rx) = channel();
                     thread::spawn(move||{
 
                         tx.send(fullscreen_screenshot());
                     });
                     self.state = EnumGuiState::LoadingRectSelection(Some(rx));
-                }
                 
             },
 
@@ -186,8 +182,9 @@ impl GlobalGuiState
                     //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
                     Ok(msg) =>
                     {
+                        frame.set_visible(true);
                         frame.set_fullscreen(true);
-                        ctx.request_repaint();
+                        //ctx.request_repaint();
                         match msg {
                             Ok(img) => {
                                 let rs = RectSelection::new(img, ctx);
@@ -201,6 +198,7 @@ impl GlobalGuiState
                     },
 
                     Err(TryRecvError::Disconnected) => {
+                        frame.set_visible(true);
                         self.alert.replace("An error occoured when trying to start the service. Please retry.");
                         self.switch_to_main_window();
                     },
@@ -256,8 +254,7 @@ impl GlobalGuiState
             self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else
         {
-            frame.set_decorations(false);
-            frame.set_window_size(Vec2::ZERO);
+            frame.set_visible(false);
             ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(None);
         }
@@ -286,10 +283,7 @@ impl GlobalGuiState
                     if DEBUG {copy_to_clipboard(&img);}
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
-                    frame.set_decorations(true);
-                    //frame.set_decorations(true);
-                    frame.set_maximized(true);
-                    ctx.request_repaint();
+                    frame.set_visible(true);
                     self.state = EnumGuiState::EditImage(em, None);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
