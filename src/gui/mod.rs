@@ -36,10 +36,12 @@ use crate::image_coding::{copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
 use std::rc::Rc;
+use std::time::Duration;
 
 use crate::screenshot::fullscreen_screenshot;
 
 use self::edit_image::EditImageEvent;
+
 
 pub enum EnumGuiState
 {
@@ -139,7 +141,10 @@ impl GlobalGuiState
             {
                 if let Some((request, screen_id)) = mw.update(ctx, frame) {
                     self.screen_id = screen_id;
-                    match request {
+                    if request.delay.delayed {
+                        thread::sleep(Duration::from_secs_f64(request.delay.scalar.clone()));
+                    }
+                    match request.area {
                         ScreenshotDim::Fullscreen => {
                             self.switch_to_edit_image(None, ctx, frame);
                         }
