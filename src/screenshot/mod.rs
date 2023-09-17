@@ -82,6 +82,11 @@ impl ScreensManager
     {
         self.screens.get(self.curr_screen_index).unwrap().0.display_info
     }
+
+    pub fn get_current_screen_icon(&self) -> Arc<Mutex<Option<RgbaImage>>>
+    {
+        self.screens.get(self.curr_screen_index).unwrap().1.clone()
+    }
 }
 
 impl Clone for ScreensManager

@@ -1,6 +1,7 @@
 
 
 use eframe::egui;
+use eframe::epaint::TextureId;
 use super::{super::*, GlobalGuiState};
 use screenshot::ScreensManager;
 extern crate image;
@@ -10,6 +11,7 @@ use std::io::stderr;
 use std::io::Write;
 use std::sync::mpsc::Sender;
 use eframe::egui::ColorImage;
+use eframe::egui::Vec2;
 
 #[derive(Clone, Copy)]
 pub struct Delay {
@@ -17,18 +19,15 @@ pub struct Delay {
     pub scalar: f64,
 }
 
-
-
-
 pub struct MainWindow {
     area: ScreenshotDim,
-    delay: Delay
+    delay: Delay,
 }
 impl MainWindow{
     pub fn new() -> Self {
         Self {
             area: ScreenshotDim::Fullscreen,
-            delay: Delay{delayed: false, scalar: 0.0 }
+            delay: Delay{delayed: false, scalar: 0.0 },
         }
     }
 
@@ -48,11 +47,13 @@ impl MainWindow{
                         ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
                         ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                     });
-                    ui.end_row();
+
 
                 ui.separator();
 
-                egui::ComboBox::from_label("Screen") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
+                ui.horizontal(|ui|
+                {
+                    egui::ComboBox::from_label("Screen") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
                     .selected_text(format!("{:?}", screens_manager.curr_screen_index))
                     .show_ui(ui, |ui|{
                         ui.style_mut().wrap = Some(false);
@@ -83,9 +84,15 @@ impl MainWindow{
                                     });
                                     
                             }
-                        });
-                        
-                    ui.end_row();
+                    });
+
+                    if ui.button("↺").on_hover_text("Refresh").clicked()
+                    {
+                        screens_manager.update_available_screens();
+                    }
+                });
+
+                    
 
                 ui.separator();
 
@@ -94,8 +101,7 @@ impl MainWindow{
                     ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
                 }
 
-                ui.end_row();
-                
+                ui.separator();
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
