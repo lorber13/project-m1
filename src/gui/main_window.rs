@@ -1,17 +1,10 @@
 
 
 use eframe::egui;
-use eframe::epaint::TextureId;
-use super::{super::*, GlobalGuiState};
-use screenshot::ScreensManager;
+use super::screens_manager::ScreensManager;
 extern crate image;
 use super::super::itc::ScreenshotDim;
-use std::rc::Rc;
-use std::io::stderr;
-use std::io::Write;
-use std::sync::mpsc::Sender;
 use eframe::egui::ColorImage;
-use eframe::egui::Vec2;
 
 #[derive(Clone, Copy)]
 pub struct Delay {

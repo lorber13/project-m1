@@ -14,7 +14,7 @@ pub struct RectSelection {
 impl RectSelection {
     pub fn new(rgba: RgbaImage, ctx: &Context) -> Self {
         if DEBUG {
-            let _ = image_coding::copy_to_clipboard(&rgba);
+            let _ = image_coding::start_thread_copy_to_clipboard(&rgba);
         }
 
         RectSelection {

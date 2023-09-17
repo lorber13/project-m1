@@ -2,7 +2,7 @@ mod gui;
 mod image_coding;
 mod hotkeys;
 mod itc;
-mod screenshot;
+mod screens_manager;
 
 const DEBUG: bool = false;
 fn main()

@@ -1,8 +1,7 @@
 
 use arboard::{Clipboard, ImageData};
 use image::{RgbaImage, ImageError};
-use std::rc::Rc;
-use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::mpsc::{Receiver, channel};
 
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -28,12 +27,23 @@ impl Into<&str> for ImageFormat
 impl ImageFormat
 {
     pub fn available_formats() -> Vec<&'static str>
-{
-    vec![ImageFormat::Png.into(), ImageFormat::JPEG.into(), ImageFormat::GIF.into()]
-} 
+    {
+        vec![ImageFormat::Png.into(), ImageFormat::JPEG.into(), ImageFormat::GIF.into()]
+    } 
 }
 
-pub fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>
+pub fn start_thread_copy_to_clipboard(img: &RgbaImage) -> Receiver<Result<(), arboard::Error>>
+{
+    let (tx, rx ) = channel();
+    let i = img.clone();
+    std::thread::spawn(move || 
+    {
+        tx.send(copy_to_clipboard(&i));
+    });
+    rx
+}
+
+fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>
 {
     let mut ctx2 = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
     let img_data = ImageData {width: img.width() as usize, height: img.height() as usize, bytes: std::borrow::Cow::Borrowed(img)};
