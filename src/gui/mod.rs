@@ -18,27 +18,20 @@ mod loading;
 mod edit_image;
 
 use eframe::egui;
-use eframe::egui::Vec2;
-use eframe::epaint::mutex::Mutex;
 use main_window::MainWindow;
 use rect_selection::RectSelection;
-use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::path::PathBuf;
-use std::sync::Condvar;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 use eframe::egui::Rect;
 use image::{RgbaImage, ImageError};
-use crate::{DEBUG, image_coding};
+use crate::{DEBUG, image_coding, screens_manager};
 use crate::gui::loading::show_loading;
-use crate::image_coding::{copy_to_clipboard, ImageFormat};
+use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat, start_thread_save_image};
 use crate::itc::ScreenshotDim;
 use edit_image::EditImage;
-use std::rc::Rc;
-
-use crate::screenshot::fullscreen_screenshot;
-
+use core::time::Duration;
 use self::edit_image::EditImageEvent;
 
 pub enum EnumGuiState
@@ -82,14 +75,12 @@ impl Clone for EnumGuiState
 }
 */
 
-
-#[derive(Debug)]
 pub struct GlobalGuiState
 {
     state: EnumGuiState,
     alert: Option<&'static str>,
     save_request: Option<(RgbaImage, ImageFormat)>,
-    screen_id: u32
+    screens_manager: screens_manager::ScreensManager
 }
 
 /*
@@ -114,7 +105,7 @@ impl GlobalGuiState
             state: EnumGuiState::MainWindow(MainWindow::new()),
             alert: None,
             save_request: None,
-            screen_id: crate::screenshot::get_main_screen_id()
+            screens_manager: screens_manager::ScreensManager::new(150)
         }
     }
 
@@ -137,9 +128,11 @@ impl GlobalGuiState
     fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::MainWindow(ref mut mw) = self.state
             {
-                if let Some((request, screen_id)) = mw.update(ctx, frame) {
-                    self.screen_id = screen_id;
-                    match request {
+                if let Some((area, delay)) = mw.update(&mut self.screens_manager, ctx, frame) {
+                    if delay.delayed {
+                        thread::sleep(Duration::from_secs_f64(delay.scalar.clone()));
+                    }
+                    match area {
                         ScreenshotDim::Fullscreen => {
                             self.switch_to_edit_image(None, ctx, frame);
                         }
@@ -165,21 +158,14 @@ impl GlobalGuiState
         
         self.state = EnumGuiState::LoadingRectSelection(None);
     }
-
     fn load_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
         match &mut self.state
         {
             EnumGuiState::LoadingRectSelection(None) => //il thread non è ancora stato spawnato
             {
-                let (tx, rx) = channel();
-                let screen_id = self.screen_id;
-                    thread::spawn(move||{
-
-                        tx.send(fullscreen_screenshot(screen_id));
-                    });
-                    self.state = EnumGuiState::LoadingRectSelection(Some(rx));
-                
+                let rx = self.screens_manager.start_thread_fullscreen_screenshot();
+                self.state = EnumGuiState::LoadingRectSelection(Some(rx));
             },
 
             EnumGuiState::LoadingRectSelection(Some(r)) => //in attesa che il thread invii l'immmagine
@@ -288,7 +274,9 @@ impl GlobalGuiState
             match r.try_recv()
             {
                 Ok(Ok(img)) => {
-                    if DEBUG {copy_to_clipboard(&img);}
+                    
+                    start_thread_copy_to_clipboard(&img);
+
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
                     frame.set_visible(true);
@@ -299,12 +287,7 @@ impl GlobalGuiState
             }
         }else if let EnumGuiState::LoadingEditImage(None) = &mut self.state
         {
-            let (tx, rx) = channel();
-            let screen_id = self.screen_id;
-            thread::spawn(move||
-                {
-                    tx.send(fullscreen_screenshot(screen_id));
-                });
+            let rx = self.screens_manager.start_thread_fullscreen_screenshot();
             self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else {unreachable!();}
     }
