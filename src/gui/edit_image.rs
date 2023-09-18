@@ -4,8 +4,10 @@ use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
     Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui,
 };
+use eframe::emath::Rot2;
 use eframe::epaint::{CircleShape, RectShape};
 use image::RgbaImage;
+use std::ops::Sub;
 
 pub enum EditImageEvent {
     Saved {
@@ -102,13 +104,23 @@ impl EditImage {
                     rect_shape.rect.max.x += painter.clip_rect().min.x;
                     rect_shape.rect.max.y *= self.scale_ratio;
                     rect_shape.rect.max.y += painter.clip_rect().min.y;
-                },
+                }
                 Shape::Circle(circle_shape) => {
                     circle_shape.center.x *= self.scale_ratio;
                     circle_shape.center.x += painter.clip_rect().min.x;
                     circle_shape.center.y *= self.scale_ratio;
                     circle_shape.center.y += painter.clip_rect().min.y;
                     circle_shape.radius *= self.scale_ratio;
+                }
+                Shape::LineSegment { points, stroke: _ } => {
+                    points[0].x *= self.scale_ratio;
+                    points[0].x += painter.clip_rect().min.x;
+                    points[0].y *= self.scale_ratio;
+                    points[0].y += painter.clip_rect().min.y;
+                    points[1].x *= self.scale_ratio;
+                    points[1].x += painter.clip_rect().min.x;
+                    points[1].y *= self.scale_ratio;
+                    points[1].y += painter.clip_rect().min.y;
                 }
                 _ => {}
             }
@@ -156,58 +168,105 @@ impl EditImage {
                 todo!()
             }
             (Tool::Arrow, _) => {
-                todo!()
+                painter.arrow(
+                    self.start_drag.unwrap(),
+                    response.hover_pos().unwrap().sub(self.start_drag.unwrap()),
+                    self.stroke,
+                );
             }
         }
     }
-    fn scale_start_drag(&self, painter: &Painter) -> Pos2 {
-        pos2(
-            (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
-            (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
-        )
-    }
     fn scaled_rect(&self, painter: &Painter, response: &Response) -> Rect {
         Rect::from_two_pos(
-            self.scale_start_drag(painter),
-            pos2(
-                (response.hover_pos().unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
-                (response.hover_pos().unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+            scaled_point(
+                painter.clip_rect().left_top(),
+                self.scale_ratio,
+                self.start_drag.unwrap(),
+            ),
+            scaled_point(
+                painter.clip_rect().left_top(),
+                self.scale_ratio,
+                response.hover_pos().unwrap(),
             ),
         ) // todo: manage hover outside the response
     }
     fn push_shape(&mut self, painter: &Painter, response: &Response) {
-        self.annotations
-            .push(match (&self.current_shape, self.fill_shape) {
-                (Tool::Rect, true) => Shape::Rect(RectShape::filled(
-                    self.scaled_rect(painter, response),
-                    Rounding::none(),
-                    self.stroke.color,
-                )),
-                (Tool::Rect, false) => Shape::Rect(RectShape::stroke(
-                    self.scaled_rect(painter, response),
-                    Rounding::none(),
-                    self.stroke,
-                )),
-                (Tool::Circle, false) => Shape::Circle(CircleShape::stroke(
-                    self.scale_start_drag(painter),
-                    response
-                        .hover_pos()
-                        .unwrap()
-                        .distance(self.start_drag.unwrap())
-                        / self.scale_ratio, // todo: manage hover outside the response
-                    self.stroke,
-                )),
-                (Tool::Circle, true) => Shape::Circle(CircleShape::filled(
-                    self.scale_start_drag(painter),
-                    response
-                        .hover_pos()
-                        .unwrap()
-                        .distance(self.start_drag.unwrap())
-                        / self.scale_ratio, // todo: manage hover outside the response
-                    self.stroke.color,
-                )),
-                _ => todo!(),
-            });
+        match (&self.current_shape, self.fill_shape) {
+            (Tool::Rect, true) => self.annotations.push(Shape::Rect(RectShape::filled(
+                self.scaled_rect(painter, response),
+                Rounding::none(),
+                self.stroke.color,
+            ))),
+            (Tool::Rect, false) => self.annotations.push(Shape::Rect(RectShape::stroke(
+                self.scaled_rect(painter, response),
+                Rounding::none(),
+                self.stroke,
+            ))),
+            (Tool::Circle, false) => self.annotations.push(Shape::Circle(CircleShape::stroke(
+                scaled_point(
+                    painter.clip_rect().left_top(),
+                    self.scale_ratio,
+                    self.start_drag.unwrap(),
+                ),
+                response
+                    .hover_pos()
+                    .unwrap()
+                    .distance(self.start_drag.unwrap())
+                    / self.scale_ratio, // todo: manage hover outside the response
+                self.stroke,
+            ))),
+            (Tool::Circle, true) => self.annotations.push(Shape::Circle(CircleShape::filled(
+                scaled_point(
+                    painter.clip_rect().left_top(),
+                    self.scale_ratio,
+                    self.start_drag.unwrap(),
+                ),
+                response
+                    .hover_pos()
+                    .unwrap()
+                    .distance(self.start_drag.unwrap())
+                    / self.scale_ratio, // todo: manage hover outside the response
+                self.stroke.color,
+            ))),
+            (Tool::Arrow, _) => {
+                let vec = response.hover_pos().unwrap().sub(self.start_drag.unwrap());
+                let origin = self.start_drag.unwrap();
+                let rot = Rot2::from_angle(std::f32::consts::TAU / 10.0);
+                let tip_length = vec.length() / 4.0;
+                let tip = origin + vec;
+                let dir = vec.normalized();
+                self.annotations.push(Shape::LineSegment {
+                    points: [
+                        scaled_point(painter.clip_rect().left_top(), self.scale_ratio, origin),
+                        scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                    ],
+                    stroke: self.stroke,
+                });
+                self.annotations.push(Shape::LineSegment {
+                    points: [
+                        scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                        scaled_point(
+                            painter.clip_rect().left_top(),
+                            self.scale_ratio,
+                            tip - tip_length * (rot * dir),
+                        ),
+                    ],
+                    stroke: self.stroke,
+                });
+                self.annotations.push(Shape::LineSegment {
+                    points: [
+                        scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                        scaled_point(
+                            painter.clip_rect().left_top(),
+                            self.scale_ratio,
+                            tip - tip_length * (rot.inverse() * dir),
+                        ),
+                    ],
+                    stroke: self.stroke,
+                });
+            }
+            _ => todo!(),
+        }
     }
     pub fn update(
         &mut self,
@@ -240,7 +299,7 @@ impl EditImage {
                         (Tool::Rect | Tool::Circle, true) => {
                             ui.color_edit_button_srgba(&mut self.stroke.color);
                         }
-                        (Tool::Rect | Tool::Circle, false) | (Tool::Line, _) => {
+                        (Tool::Rect | Tool::Circle, false) | (Tool::Line, _) | (Tool::Arrow, _) => {
                             stroke_ui(ui, &mut self.stroke, "Stroke");
                         }
                         _ => {}
@@ -270,4 +329,11 @@ impl EditImage {
         });
         ret
     }
+}
+
+fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
+    pos2(
+        (point.x - top_left.x) / scale_ratio,
+        (point.y - top_left.y) / scale_ratio,
+    )
 }
