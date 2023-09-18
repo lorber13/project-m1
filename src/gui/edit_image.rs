@@ -4,7 +4,7 @@ use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
     Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui,
 };
-use eframe::epaint::RectShape;
+use eframe::epaint::{CircleShape, RectShape};
 use image::RgbaImage;
 
 pub enum EditImageEvent {
@@ -21,7 +21,11 @@ enum Tool {
     Line,
     Circle,
     Rect,
-    Rubber,
+    Arrow,
+    /* todo:
+       text, very difficult
+       rubber, not mandatory but recommended
+    */
 }
 
 pub struct EditImage {
@@ -98,6 +102,13 @@ impl EditImage {
                     rect_shape.rect.max.x += painter.clip_rect().min.x;
                     rect_shape.rect.max.y *= self.scale_ratio;
                     rect_shape.rect.max.y += painter.clip_rect().min.y;
+                },
+                Shape::Circle(circle_shape) => {
+                    circle_shape.center.x *= self.scale_ratio;
+                    circle_shape.center.x += painter.clip_rect().min.x;
+                    circle_shape.center.y *= self.scale_ratio;
+                    circle_shape.center.y += painter.clip_rect().min.y;
+                    circle_shape.radius *= self.scale_ratio;
                 }
                 _ => {}
             }
@@ -119,18 +130,32 @@ impl EditImage {
                     Rect::from_two_pos(self.start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
                     Rounding::none(),
                     self.stroke,
-                )
+                );
             }
             (Tool::Circle, true) => {
-                todo!()
+                painter.circle_filled(
+                    self.start_drag.unwrap(),
+                    response
+                        .hover_pos()
+                        .unwrap()
+                        .distance(self.start_drag.unwrap()),
+                    self.stroke.color,
+                );
             }
             (Tool::Circle, false) => {
-                todo!()
+                painter.circle_stroke(
+                    self.start_drag.unwrap(),
+                    response
+                        .hover_pos()
+                        .unwrap()
+                        .distance(self.start_drag.unwrap()),
+                    self.stroke,
+                );
             }
             (Tool::Line, _) => {
                 todo!()
             }
-            (Tool::Rubber, _) => {
+            (Tool::Arrow, _) => {
                 todo!()
             }
         }
@@ -160,6 +185,30 @@ impl EditImage {
                     Rounding::none(),
                     self.stroke,
                 )),
+                (Tool::Circle, false) => Shape::Circle(CircleShape::stroke(
+                    pos2(
+                        (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
+                        (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+                    ),
+                    response
+                        .hover_pos()
+                        .unwrap()
+                        .distance(self.start_drag.unwrap())
+                        / self.scale_ratio, // todo: manage hover outside the response
+                    self.stroke,
+                )),
+                (Tool::Circle, true) => Shape::Circle(CircleShape::filled(
+                    pos2(
+                        (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
+                        (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+                    ),
+                    response
+                        .hover_pos()
+                        .unwrap()
+                        .distance(self.start_drag.unwrap())
+                        / self.scale_ratio, // todo: manage hover outside the response
+                    self.stroke.color,
+                )),
                 _ => todo!(),
             });
     }
@@ -185,7 +234,7 @@ impl EditImage {
                     ui.selectable_value(&mut self.current_shape, Tool::Rect, "rectangle");
                     ui.selectable_value(&mut self.current_shape, Tool::Circle, "circle");
                     ui.selectable_value(&mut self.current_shape, Tool::Line, "line");
-                    ui.selectable_value(&mut self.current_shape, Tool::Rubber, "rubber");
+                    ui.selectable_value(&mut self.current_shape, Tool::Arrow, "arrow");
                     if let Tool::Rect | Tool::Circle = self.current_shape {
                         ui.selectable_value(&mut self.fill_shape, true, "filled");
                         ui.selectable_value(&mut self.fill_shape, false, "border");
