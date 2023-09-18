@@ -284,15 +284,6 @@ impl EditImage {
         CentralPanel::default().show(ctx, |ui| {
             ui.add_enabled_ui(enabled, |ui| {
                 ui.horizontal_top(|ui| {
-                    ComboBox::from_label("") //menù a tendina per la scelta del formato di output
-                        .selected_text(format!("{:?}", self.format))
-                        .show_ui(ui, |ui| {
-                            ui.style_mut().wrap = Some(false);
-                            ui.set_min_width(60.0);
-                            ui.selectable_value(&mut self.format, ImageFormat::Png, "Png");
-                            ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
-                            ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
-                        });
                     ui.selectable_value(&mut self.current_shape, Tool::Rect, "rectangle");
                     ui.selectable_value(&mut self.current_shape, Tool::Circle, "circle");
                     ui.selectable_value(&mut self.current_shape, Tool::Line, "line");
@@ -311,6 +302,15 @@ impl EditImage {
                         _ => {}
                     }
 
+                    ComboBox::from_label("") //menù a tendina per la scelta del formato di output
+                        .selected_text(format!("{:?}", self.format))
+                        .show_ui(ui, |ui| {
+                            ui.style_mut().wrap = Some(false);
+                            ui.set_min_width(60.0);
+                            ui.selectable_value(&mut self.format, ImageFormat::Png, "Png");
+                            ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
+                            ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
+                        });
                     if ui.button("Save").clicked() {
                         ret = EditImageEvent::Saved {
                             image: self.image.clone(), // todo: ugly clone
