@@ -104,6 +104,7 @@ impl EditImage {
                     rect_shape.rect.max.x += painter.clip_rect().min.x;
                     rect_shape.rect.max.y *= self.scale_ratio;
                     rect_shape.rect.max.y += painter.clip_rect().min.y;
+                    rect_shape.stroke.width *= self.scale_ratio;
                 }
                 Shape::Circle(circle_shape) => {
                     circle_shape.center.x *= self.scale_ratio;
@@ -111,8 +112,12 @@ impl EditImage {
                     circle_shape.center.y *= self.scale_ratio;
                     circle_shape.center.y += painter.clip_rect().min.y;
                     circle_shape.radius *= self.scale_ratio;
+                    circle_shape.stroke.width *= self.scale_ratio;
                 }
-                Shape::LineSegment { points, stroke: _ } => {
+                Shape::LineSegment {
+                    points,
+                    stroke,
+                } => {
                     points[0].x *= self.scale_ratio;
                     points[0].x += painter.clip_rect().min.x;
                     points[0].y *= self.scale_ratio;
@@ -121,6 +126,7 @@ impl EditImage {
                     points[1].x += painter.clip_rect().min.x;
                     points[1].y *= self.scale_ratio;
                     points[1].y += painter.clip_rect().min.y;
+                    stroke.width *= self.scale_ratio;
                 }
                 _ => {}
             }
@@ -200,7 +206,7 @@ impl EditImage {
             (Tool::Rect, false) => self.annotations.push(Shape::Rect(RectShape::stroke(
                 self.scaled_rect(painter, response),
                 Rounding::none(),
-                self.stroke,
+                Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
             ))),
             (Tool::Circle, false) => self.annotations.push(Shape::Circle(CircleShape::stroke(
                 scaled_point(
@@ -213,7 +219,7 @@ impl EditImage {
                     .unwrap()
                     .distance(self.start_drag.unwrap())
                     / self.scale_ratio, // todo: manage hover outside the response
-                self.stroke,
+                Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
             ))),
             (Tool::Circle, true) => self.annotations.push(Shape::Circle(CircleShape::filled(
                 scaled_point(
@@ -240,7 +246,7 @@ impl EditImage {
                         scaled_point(painter.clip_rect().left_top(), self.scale_ratio, origin),
                         scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
                     ],
-                    stroke: self.stroke,
+                    stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
                 });
                 self.annotations.push(Shape::LineSegment {
                     points: [
@@ -251,7 +257,7 @@ impl EditImage {
                             tip - tip_length * (rot * dir),
                         ),
                     ],
-                    stroke: self.stroke,
+                    stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
                 });
                 self.annotations.push(Shape::LineSegment {
                     points: [
@@ -262,7 +268,7 @@ impl EditImage {
                             tip - tip_length * (rot.inverse() * dir),
                         ),
                     ],
-                    stroke: self.stroke,
+                    stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
                 });
             }
             _ => todo!(),
