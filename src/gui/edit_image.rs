@@ -160,12 +160,15 @@ impl EditImage {
             }
         }
     }
+    fn scale_start_drag(&self, painter: &Painter) -> Pos2 {
+        pos2(
+            (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
+            (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+        )
+    }
     fn scaled_rect(&self, painter: &Painter, response: &Response) -> Rect {
         Rect::from_two_pos(
-            pos2(
-                (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
-                (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
-            ),
+            self.scale_start_drag(painter),
             pos2(
                 (response.hover_pos().unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
                 (response.hover_pos().unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
@@ -186,10 +189,7 @@ impl EditImage {
                     self.stroke,
                 )),
                 (Tool::Circle, false) => Shape::Circle(CircleShape::stroke(
-                    pos2(
-                        (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
-                        (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
-                    ),
+                    self.scale_start_drag(painter),
                     response
                         .hover_pos()
                         .unwrap()
@@ -198,10 +198,7 @@ impl EditImage {
                     self.stroke,
                 )),
                 (Tool::Circle, true) => Shape::Circle(CircleShape::filled(
-                    pos2(
-                        (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
-                        (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
-                    ),
+                    self.scale_start_drag(painter),
                     response
                         .hover_pos()
                         .unwrap()
