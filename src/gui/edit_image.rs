@@ -1,16 +1,11 @@
 use super::egui::ComboBox;
 use crate::image_coding::ImageFormat;
 use eframe::egui::{
-    pos2, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Rect, Response, Sense,
-    TextureHandle, Ui,
+    pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
+    Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui,
 };
+use eframe::epaint::RectShape;
 use image::RgbaImage;
-
-pub struct EditImage {
-    image: RgbaImage,
-    format: ImageFormat,
-    texture_handle: TextureHandle,
-}
 
 pub enum EditImageEvent {
     Saved {
@@ -21,9 +16,31 @@ pub enum EditImageEvent {
     Nil,
 }
 
+#[derive(PartialEq)]
+enum Tool {
+    Line,
+    Circle,
+    Rect,
+    Rubber,
+}
+
+pub struct EditImage {
+    current_shape: Tool,
+    stroke: Stroke,
+    fill_shape: bool,
+    start_drag: Option<Pos2>,
+    image: RgbaImage,
+    format: ImageFormat,
+    texture_handle: TextureHandle,
+    annotations: Vec<Shape>,
+    scale_ratio: f32,
+}
+
 impl EditImage {
     pub fn new(rgba: RgbaImage, ctx: &Context) -> EditImage {
         EditImage {
+            current_shape: Tool::Rect,
+            start_drag: None,
             texture_handle: ctx.load_texture(
                 "screenshot_image",
                 ColorImage::from_rgba_unmultiplied(
@@ -34,12 +51,20 @@ impl EditImage {
             ),
             image: rgba,
             format: ImageFormat::Png,
+            annotations: Vec::new(),
+            scale_ratio: Default::default(),
+            stroke: Stroke {
+                width: 1.0,
+                color: Color32::GREEN.gamma_multiply(0.5),
+            },
+            fill_shape: false,
         }
     }
-    fn display_image(&mut self, ui: &mut Ui) -> (Response, Painter) {
+
+    fn display_window(&mut self, ui: &mut Ui) -> (Response, Painter) {
         let available_size = ui.available_size_before_wrap();
         let image_size = self.texture_handle.size_vec2();
-        let scaling_ratio = {
+        self.scale_ratio = {
             let mut ratio = if image_size.x / available_size.x > image_size.y / available_size.y {
                 available_size.x / image_size.x
             } else {
@@ -51,8 +76,8 @@ impl EditImage {
             ratio
         };
         let scaled_dimensions = vec2(
-            self.texture_handle.size()[0] as f32 * scaling_ratio,
-            self.texture_handle.size()[1] as f32 * scaling_ratio,
+            self.texture_handle.size()[0] as f32 * self.scale_ratio,
+            self.texture_handle.size()[1] as f32 * self.scale_ratio,
         );
         let (response, painter) = ui.allocate_painter(scaled_dimensions, Sense::click_and_drag());
         painter.image(
@@ -61,7 +86,82 @@ impl EditImage {
             Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
             Color32::WHITE,
         );
+        let mut new_annotations = self.annotations.clone();
+        for annotation in new_annotations.iter_mut() {
+            match annotation {
+                Shape::Rect(rect_shape) => {
+                    rect_shape.rect.min.x *= self.scale_ratio;
+                    rect_shape.rect.min.x += painter.clip_rect().min.x;
+                    rect_shape.rect.min.y *= self.scale_ratio;
+                    rect_shape.rect.min.y += painter.clip_rect().min.y;
+                    rect_shape.rect.max.x *= self.scale_ratio;
+                    rect_shape.rect.max.x += painter.clip_rect().min.x;
+                    rect_shape.rect.max.y *= self.scale_ratio;
+                    rect_shape.rect.max.y += painter.clip_rect().min.y;
+                }
+                _ => {}
+            }
+        }
+        painter.extend(new_annotations); // Do I need to redraw annotations every single frame? Yes because every frame the scaling ratio can change
         (response, painter)
+    }
+    fn draw_shape(&mut self, painter: &Painter, response: &Response) {
+        match (&self.current_shape, self.fill_shape) {
+            (Tool::Rect, true) => {
+                painter.rect_filled(
+                    Rect::from_two_pos(self.start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                    Rounding::none(),
+                    self.stroke.color,
+                );
+            }
+            (Tool::Rect, false) => {
+                painter.rect_stroke(
+                    Rect::from_two_pos(self.start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                    Rounding::none(),
+                    self.stroke,
+                )
+            }
+            (Tool::Circle, true) => {
+                todo!()
+            }
+            (Tool::Circle, false) => {
+                todo!()
+            }
+            (Tool::Line, _) => {
+                todo!()
+            }
+            (Tool::Rubber, _) => {
+                todo!()
+            }
+        }
+    }
+    fn scaled_rect(&self, painter: &Painter, response: &Response) -> Rect {
+        Rect::from_two_pos(
+            pos2(
+                (self.start_drag.unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
+                (self.start_drag.unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+            ),
+            pos2(
+                (response.hover_pos().unwrap().x - painter.clip_rect().min.x) / self.scale_ratio,
+                (response.hover_pos().unwrap().y - painter.clip_rect().min.y) / self.scale_ratio,
+            ),
+        ) // todo: manage hover outside the response
+    }
+    fn push_shape(&mut self, painter: &Painter, response: &Response) {
+        self.annotations
+            .push(match (&self.current_shape, self.fill_shape) {
+                (Tool::Rect, true) => Shape::Rect(RectShape::filled(
+                    self.scaled_rect(painter, response),
+                    Rounding::none(),
+                    self.stroke.color,
+                )),
+                (Tool::Rect, false) => Shape::Rect(RectShape::stroke(
+                    self.scaled_rect(painter, response),
+                    Rounding::none(),
+                    self.stroke,
+                )),
+                _ => todo!(),
+            });
     }
     pub fn update(
         &mut self,
@@ -82,21 +182,44 @@ impl EditImage {
                             ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
                             ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
                         });
+                    ui.selectable_value(&mut self.current_shape, Tool::Rect, "rectangle");
+                    ui.selectable_value(&mut self.current_shape, Tool::Circle, "circle");
+                    ui.selectable_value(&mut self.current_shape, Tool::Line, "line");
+                    ui.selectable_value(&mut self.current_shape, Tool::Rubber, "rubber");
+                    if let Tool::Rect | Tool::Circle = self.current_shape {
+                        ui.selectable_value(&mut self.fill_shape, true, "filled");
+                        ui.selectable_value(&mut self.fill_shape, false, "border");
+                    }
+                    match (&self.current_shape, self.fill_shape) {
+                        (Tool::Rect | Tool::Circle, true) => {
+                            ui.color_edit_button_srgba(&mut self.stroke.color);
+                        }
+                        (Tool::Rect | Tool::Circle, false) | (Tool::Line, _) => {
+                            stroke_ui(ui, &mut self.stroke, "Stroke");
+                        }
+                        _ => {}
+                    }
 
                     if ui.button("Save").clicked() {
                         ret = EditImageEvent::Saved {
-                            image: self.image.clone(),   // todo: ugly clone
-                            format: self.format.clone(), // todo: should be a state
+                            image: self.image.clone(), // todo: ugly clone
+                            format: self.format.clone(),
                         };
                     }
-
                     if ui.button("Abort").clicked() {
                         ret = EditImageEvent::Aborted;
                     }
-                    ui.set_max_height(30.0);
                 });
-                ui.end_row();
-                let (response, painter) = self.display_image(ui);
+                ui.separator();
+                let (response, painter) = self.display_window(ui);
+                if response.drag_started() {
+                    self.start_drag = response.hover_pos();
+                } else if response.dragged() {
+                    self.draw_shape(&painter, &response);
+                } else if response.drag_released() {
+                    self.draw_shape(&painter, &response);
+                    self.push_shape(&painter, &response);
+                }
             });
         });
         ret
