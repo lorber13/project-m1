@@ -21,12 +21,10 @@ impl Clone for ScreenshotDim
     }
 }
 
-
-
-pub enum SignalToHeadThread
+pub enum SettingsEvent
 {
-    AcquirePressed(ScreenshotDim),
-    RectSelected(Rect),
-    PathSelected(Option<PathBuf>),
-    Shutdown
+    Saved,
+    Aborted,
+    Nil
 }
+

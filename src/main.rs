@@ -4,7 +4,7 @@ mod hotkeys;
 mod itc;
 mod screens_manager;
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 fn main()
 {
     gui::launch_gui();
