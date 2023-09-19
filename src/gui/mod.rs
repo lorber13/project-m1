@@ -44,7 +44,7 @@ pub enum EnumGuiState
     LoadingRectSelection(u64,Option<Receiver<Result<RgbaImage, &'static str>>>),
     RectSelection(RectSelection),
     LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
-    EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
+    EditImage(EditImage),
     Saving(Receiver<Result<(), ImageError>>)
 }
 
@@ -338,7 +338,7 @@ impl GlobalGuiState
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
                     frame.set_visible(true);
-                    self.state = EnumGuiState::EditImage(em, None);
+                    self.state = EnumGuiState::EditImage(em);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
                 Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.replace("Unable to load the image. please retry"); self.switch_to_main_window(frame);}
@@ -354,85 +354,24 @@ impl GlobalGuiState
 
     fn show_edit_image(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        match &mut self.state
+        if let EnumGuiState::EditImage(em) = &mut self.state
         {
-            EnumGuiState::EditImage(ref mut em, None) => //non c'è attesa su nessun canale: aggiorno normalmente la finestra
+            match em.update(ctx, frame, true)
             {
-                match em.update(ctx, frame, true)
+                // todo: manage different formats
+                EditImageEvent::Saved {image, format} => 
                 {
-                    // todo: manage different formats
-                    EditImageEvent::Saved {image, format} => 
-                    {
-                        self.save_request = Some((image, format.clone()));
+                    self.save_request = Some((image, format.clone()));
 
-                        self.manage_save_request();
-                    },
-                    EditImageEvent::Aborted => { self.switch_to_main_window(frame)},
-                    EditImageEvent::Nil => ()
-                }
+                    self.manage_save_request();
+                },
+                EditImageEvent::Aborted => { self.switch_to_main_window(frame)},
+                EditImageEvent::Nil => ()
             }
-            EnumGuiState::EditImage(em, Some(r)) => //il file dialog è aperto
-            {
-                //self.wait_file_dialog(ctx, frame);
-            },
-    
-            _ => {unreachable!();}
-           
-        }
+               
+        }else {unreachable!();}
     }
 
-    /*
-    fn wait_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
-    {
-        if let EnumGuiState::EditImage(em, opt_rx) =  &mut self.state
-        {
-           if let Some(rx) = opt_rx
-           {
-                match rx.try_recv() //controllo se il thread ha già inviato attraverso il canale
-                {
-                    Ok(pb_opt) => {   //in caso sia già stato ricevuto un messaggio, esso può essere a sua volta None (se l'utente ha deciso di annullare il salvataggio)
-                        *opt_rx = None;
-                        match pb_opt
-                        {
-                            Some(pb) => 
-                            {
-                                let rq = self.save_request.take().expect("self.save_request must not be empty");
-                                let file_output = pb.with_extension::<&'static str>(rq.1.into());
-                                let rx = image_coding::start_thread_save_image(file_output, rq.0);
-                                self.state = EnumGuiState::Saving(rx);
-                            },
-                            None => { *opt_rx = None; }   //se l'operazione è stata annullata, si torna a image editing
-                        }
-                    },
-
-                    Err(TryRecvError::Empty) => {   //in caso non sia ancora stato ricevuto il messaggio, continuo a mostrare la finestra precedente disabilitata
-                        em.update(ctx, frame, false);
-                    },
-
-                    Err(TryRecvError::Disconnected) => {    //in caso il thread sia fallito, segnalo errore e torno a mostrare EditImage
-                        *opt_rx = None;
-                        self.alert.replace("Error in file dialog. Please retry.");
-                    }
-                }
-           }
-        }
-    }
-
-    pub fn start_file_dialog(&mut self, format: ImageFormat) 
-    {
-        let (tx, rx) = channel::<Option<PathBuf>>();
-        std::thread::spawn(move ||
-            {
-                tx.send(file_dialog::show_save_dialog(format))
-            });
-
-        if let EnumGuiState::EditImage(_, ref mut r_opt ) = self.state
-        {
-            *r_opt = Some(rx);
-        }
-        
-    }
-    */
     fn manage_save_request(&mut self)
     {
         match (self.save_settings.get_default_dir(), self.save_settings.get_default_name())
