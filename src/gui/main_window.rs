@@ -25,12 +25,13 @@ impl MainWindow{
         }
     }
 
-    pub fn update(&mut self, ui: &mut egui::Ui, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, Delay)> 
+    pub fn update(&mut self, ui: &mut egui::Ui, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, f64)>
     {
         let mut ret = None;
+        let mut delayed: bool;
 
-            ui.style_mut().animation_time = 0.0;
-           egui::CentralPanel::default().show_inside(ui, |ui|
+        ui.style_mut().animation_time = 0.0;
+        egui::CentralPanel::default().show_inside(ui, |ui|
             {
                 ui.style_mut().animation_time = 0.0;
                 ui.label("Capture Mode");
@@ -48,47 +49,47 @@ impl MainWindow{
                 ui.separator();
 
                 ui.horizontal(|ui|
-                {
-                    egui::ComboBox::from_label("Screen") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
-                    .selected_text(format!("{:?}", screens_manager.curr_screen_index))
-                    .show_ui(ui, |ui|{
-                        ui.style_mut().wrap = Some(false);
-                        ui.set_min_width(60.0);
-                        for (i, s) in screens_manager.screens.iter().enumerate()
-                            {
-                                let di = s.0.display_info;
+                    {
+                        egui::ComboBox::from_label("Screen") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
+                            .selected_text(format!("{:?}", screens_manager.curr_screen_index))
+                            .show_ui(ui, |ui|{
+                                ui.style_mut().wrap = Some(false);
+                                ui.set_min_width(60.0);
+                                for (i, s) in screens_manager.screens.iter().enumerate()
+                                {
+                                    let di = s.0.display_info;
                                     let str = format!("({}x{})", di.width, di.height);
-                                    
+
                                     ui.horizontal(|ui|
-                                    {
-                                        if let Ok(guard) = s.1.try_lock()
                                         {
-                                            if let Some(rgba) = guard.clone()
+                                            if let Ok(guard) = s.1.try_lock()
                                             {
-                                                let txt = ctx.load_texture("icon", 
-                                                                            ColorImage::from_rgba_unmultiplied(
-                                                                                        [rgba.width() as usize, rgba.height() as usize],
-                                                                                        rgba.as_raw(),
-                                                                                    ), Default::default());
-                                                ui.image(txt.id(), txt.size_vec2());
-                                            }else {
-                                                ui.spinner();
-                                            }
-                                        }else {ui.spinner();}
-                                        
-                                        ui.selectable_value(&mut screens_manager.curr_screen_index, i, &str);
-                                    });
-                                    
-                            }
+                                                if let Some(rgba) = guard.clone()
+                                                {
+                                                    let txt = ctx.load_texture("icon",
+                                                                               ColorImage::from_rgba_unmultiplied(
+                                                                                   [rgba.width() as usize, rgba.height() as usize],
+                                                                                   rgba.as_raw(),
+                                                                               ), Default::default());
+                                                    ui.image(txt.id(), txt.size_vec2());
+                                                }else {
+                                                    ui.spinner();
+                                                }
+                                            }else {ui.spinner();}
+
+                                            ui.selectable_value(&mut screens_manager.curr_screen_index, i, &str);
+                                        });
+
+                                }
+                            });
+
+                        if ui.button("↺").on_hover_text("Refresh").clicked()
+                        {
+                            screens_manager.update_available_screens();
+                        }
                     });
 
-                    if ui.button("↺").on_hover_text("Refresh").clicked()
-                    {
-                        screens_manager.update_available_screens();
-                    }
-                });
 
-                    
 
                 ui.separator();
 
@@ -101,8 +102,8 @@ impl MainWindow{
                 // gestione della pressione del pulsante "Acquire"
                 if ui.button("Acquire").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
-                    //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
-                    ret = Some((self.area.clone(), self.delay));
+                    //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area
+                    ret = Some((self.area.clone(), self.delay.scalar));
                 }
 
             });
