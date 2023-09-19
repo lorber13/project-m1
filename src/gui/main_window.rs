@@ -12,6 +12,7 @@ pub struct Delay {
     pub scalar: f64,
 }
 
+
 pub struct MainWindow {
     area: ScreenshotDim,
     delay: Delay,
@@ -24,12 +25,14 @@ impl MainWindow{
         }
     }
 
-    pub fn update(&mut self, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, Delay)> {
-
+    pub fn update(&mut self, ui: &mut egui::Ui, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, Delay)> 
+    {
         let mut ret = None;
 
-           egui::CentralPanel::default().show(ctx, |ui|
+            ui.style_mut().animation_time = 0.0;
+           egui::CentralPanel::default().show_inside(ui, |ui|
             {
+                ui.style_mut().animation_time = 0.0;
                 ui.label("Capture Mode");
                 ui.separator();
                 egui::ComboBox::from_label("Area") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
@@ -101,6 +104,7 @@ impl MainWindow{
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
                     ret = Some((self.area.clone(), self.delay));
                 }
+
             });
         ret
     }

@@ -16,28 +16,32 @@ mod error_alert;
 pub mod file_dialog;
 mod loading;
 mod edit_image;
+mod save_settings;
 
-use eframe::egui;
+use eframe::egui::{self, CentralPanel};
+use eframe::epaint::{Color32, Vec2};
 use main_window::MainWindow;
 use rect_selection::RectSelection;
 use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
-use eframe::egui::Rect;
+use eframe::egui::{Rect, Ui};
 use image::{RgbaImage, ImageError};
 use crate::{DEBUG, image_coding, screens_manager};
 use crate::gui::loading::show_loading;
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat, start_thread_save_image};
-use crate::itc::ScreenshotDim;
+use crate::itc::{ScreenshotDim, SettingsEvent};
 use edit_image::EditImage;
 use core::time::Duration;
 use self::edit_image::EditImageEvent;
+use save_settings::SaveSettings;
 
 pub enum EnumGuiState
 {
     MainWindow(MainWindow),
-    LoadingRectSelection(Option<Receiver<Result<RgbaImage, &'static str>>>),
+    SaveSettings(SaveSettings),
+    LoadingRectSelection(u64,Option<Receiver<Result<RgbaImage, &'static str>>>),
     RectSelection(RectSelection),
     LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
     EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
@@ -51,6 +55,7 @@ impl std::fmt::Debug for EnumGuiState
         match self
         {
             EnumGuiState::MainWindow(_) => write!(f, "EnumGuiState::MainWindow"),
+            EnumGuiState::SaveSettings(..) => write!(f, "EnumGuiState::SaveSettings"),
             EnumGuiState::LoadingRectSelection(..) => write!(f, "EnumGuiState::LoadingRectSelection"),
             EnumGuiState::RectSelection(..) => write!(f, "EnumGuiState::RectSelection"),
             EnumGuiState::EditImage(..) => write!(f, "EnumGuiState::EditImage"),
@@ -80,7 +85,8 @@ pub struct GlobalGuiState
     state: EnumGuiState,
     alert: Option<&'static str>,
     save_request: Option<(RgbaImage, ImageFormat)>,
-    screens_manager: screens_manager::ScreensManager
+    screens_manager: screens_manager::ScreensManager,
+    save_settings: SaveSettings
 }
 
 /*
@@ -105,12 +111,32 @@ impl GlobalGuiState
             state: EnumGuiState::MainWindow(MainWindow::new()),
             alert: None,
             save_request: None,
-            screens_manager: screens_manager::ScreensManager::new(150)
+            screens_manager: screens_manager::ScreensManager::new(150),
+            save_settings: SaveSettings::new()
         }
     }
 
 
+    fn show_menu(&mut self, ui: &mut Ui, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        let mut menu_clicked = false;
+        egui::menu::bar(ui, |ui|
+        {
+            ui.visuals_mut().dark_mode = false;
+            ui.menu_button("Settings...", |ui|
+            {
+                if ui.button("Save Settings").clicked()
+                {
+                    ui.close_menu();
+                    self.switch_to_save_settings(ctx, frame);
+                    self.show_save_settings(ui, ctx, frame);
+                    menu_clicked = true;
+                }
+            })
+        });
 
+        if !menu_clicked {ui.separator(); self.show_main_window(ui, ctx, frame);}
+    }
 
 
     /*----------------MAIN WINDOW------------------------------------------ */
@@ -125,23 +151,48 @@ impl GlobalGuiState
         self.state = EnumGuiState::MainWindow(MainWindow::new());
     }
 
-    fn show_main_window(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn show_main_window(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::MainWindow(ref mut mw) = self.state
-            {
-                if let Some((area, delay)) = mw.update(&mut self.screens_manager, ctx, frame) {
-                    if delay.delayed {
-                        thread::sleep(Duration::from_secs_f64(delay.scalar.clone()));
+        {
+            //controllo l'utput della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
+            if let Some((area, delay)) = mw.update(ui, &mut self.screens_manager, ctx, frame) {
+                if delay.delayed {
+                    thread::sleep(Duration::from_secs_f64(delay.scalar.clone()));
+                }
+                match area {
+                    ScreenshotDim::Fullscreen => {
+                        self.switch_to_edit_image(None, ctx, frame);
                     }
-                    match area {
-                        ScreenshotDim::Fullscreen => {
-                            self.switch_to_edit_image(None, ctx, frame);
-                        }
-                        ScreenshotDim::Rectangle => {
-                            self.switch_to_rect_selection(ctx, frame);
-                        }
+                    ScreenshotDim::Rectangle => {
+                        self.switch_to_rect_selection(ctx, frame);
                     }
                 }
             }
+        }else {unreachable!();}
+    }
+
+
+
+
+    //-----------------------------SAVE SETTINGS-------------------------------------------------------------------
+    fn switch_to_save_settings(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        if DEBUG {print!("DEBUG: switch to save settings");}
+        self.state = EnumGuiState::SaveSettings(self.save_settings.clone()); //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+    }
+
+    fn show_save_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        if let EnumGuiState::SaveSettings(ss) = &mut self.state
+        {
+            match ss.update(ui, ctx, frame)
+            {
+                SettingsEvent::Saved => { self.save_settings = ss.clone(); self.switch_to_main_window(frame); },
+                SettingsEvent::Aborted => self.switch_to_main_window(frame),
+                SettingsEvent::Nil => ()
+            }  
+        }else {unreachable!();}
+          
     }
 
 
@@ -155,20 +206,28 @@ impl GlobalGuiState
     {
         frame.set_visible(false);
         ctx.request_repaint();
-        
-        self.state = EnumGuiState::LoadingRectSelection(None);
+        if DEBUG { println!("nframe (switch to rect selection): {}", ctx.frame_nr()); }
+        self.state = EnumGuiState::LoadingRectSelection(ctx.frame_nr(), None);
     }
     fn load_rect_selection(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
         match &mut self.state
         {
-            EnumGuiState::LoadingRectSelection(None) => //il thread non è ancora stato spawnato
+            EnumGuiState::LoadingRectSelection(nf, None) => //il thread non è ancora stato spawnato
             {
-                let rx = self.screens_manager.start_thread_fullscreen_screenshot();
-                self.state = EnumGuiState::LoadingRectSelection(Some(rx));
+                if (*nf+13) <= ctx.frame_nr()
+                {
+                    if DEBUG {println!("nframe (load rect selection): {}", ctx.frame_nr());}
+                    let rx = self.screens_manager.start_thread_fullscreen_screenshot();
+                    self.state = EnumGuiState::LoadingRectSelection(*nf, Some(rx));
+                    ctx.request_repaint();
+                }else {
+                    ctx.request_repaint();
+                }
+                
             },
 
-            EnumGuiState::LoadingRectSelection(Some(r)) => //in attesa che il thread invii l'immmagine
+            EnumGuiState::LoadingRectSelection(_, Some(r)) => //in attesa che il thread invii l'immmagine
             {
                 //se sono in stato di attesa, controllo se il thread worker ha inviato sul canale
                 match r.try_recv()
@@ -176,14 +235,13 @@ impl GlobalGuiState
                     //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
                     Ok(msg) =>
                     {
+                        ctx.request_repaint();
                         frame.set_visible(true);
                         frame.set_fullscreen(true);
-                        //ctx.request_repaint();
                         match msg {
                             Ok(img) => {
                                 let rs = RectSelection::new(img, ctx);
                                 self.state = EnumGuiState::RectSelection(rs);
-                                //ctx.request_repaint(); //necessario per rendere dinuovo il frame visibile (dopo averlo reso invisibile)
                             }
                             Err(error_message) => {
                                 self.alert = Some(error_message)
@@ -196,7 +254,7 @@ impl GlobalGuiState
                         self.alert.replace("An error occoured when trying to start the service. Please retry.");
                         self.switch_to_main_window(frame);
                     },
-                    Err(TryRecvError::Empty) => show_loading(ctx)
+                    Err(TryRecvError::Empty) => ctx.request_repaint()
                 }
             },
 
@@ -363,7 +421,7 @@ impl GlobalGuiState
         let (tx, rx) = channel::<Option<PathBuf>>();
         std::thread::spawn(move ||
             {
-                tx.send(file_dialog::show_file_dialog(format))
+                tx.send(file_dialog::show_save_dialog(format))
             });
 
         if let EnumGuiState::EditImage(_, ref mut r_opt ) = self.state
@@ -421,17 +479,27 @@ impl eframe::App for GlobalGuiState
 
         match &mut self.state
         {
-            EnumGuiState::MainWindow(_) => {
-                self.show_main_window(ctx, frame);
+            EnumGuiState::MainWindow(..) => {
+                CentralPanel::default().show(ctx, |ui|
+                {
+                    self.show_menu(ui, ctx, frame);
+                });
             },
-            EnumGuiState::LoadingRectSelection(_) =>
+            EnumGuiState::SaveSettings(..) =>
+            {
+                CentralPanel::default().show(ctx, |ui|
+                    {
+                        self.show_save_settings(ui, ctx, frame);
+                    });
+            },
+            EnumGuiState::LoadingRectSelection(..) =>
             {
                 self.load_rect_selection(ctx, frame);
             }
             EnumGuiState::RectSelection(..) => {
                     self.show_rect_selection(ctx, frame);
             }, 
-            EnumGuiState::LoadingEditImage(_) =>
+            EnumGuiState::LoadingEditImage(..) =>
             {
                 self.load_edit_image(ctx, frame);
             },
