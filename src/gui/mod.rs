@@ -364,7 +364,8 @@ impl GlobalGuiState
                     EditImageEvent::Saved {image, format} => 
                     {
                         self.save_request = Some((image, format.clone()));
-                        self.start_file_dialog(format)
+
+                        self.manage_save_request();
                     },
                     EditImageEvent::Aborted => { self.switch_to_main_window(frame)},
                     EditImageEvent::Nil => ()
@@ -372,7 +373,7 @@ impl GlobalGuiState
             }
             EnumGuiState::EditImage(em, Some(r)) => //il file dialog è aperto
             {
-                self.wait_file_dialog(ctx, frame);
+                //self.wait_file_dialog(ctx, frame);
             },
     
             _ => {unreachable!();}
@@ -380,6 +381,7 @@ impl GlobalGuiState
         }
     }
 
+    /*
     fn wait_file_dialog(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::EditImage(em, opt_rx) =  &mut self.state
@@ -429,6 +431,55 @@ impl GlobalGuiState
             *r_opt = Some(rx);
         }
         
+    }
+    */
+    fn manage_save_request(&mut self)
+    {
+        match (self.save_settings.get_default_dir(), self.save_settings.get_default_name())
+        {
+            (Some(dp), Some(dn)) => 
+            {
+                let pb = PathBuf::from(dp);
+                let fr = self.save_request.take().unwrap();
+                let ext: &str = fr.1.into();
+                self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(pb, dn,String::from(ext), fr.0 ));
+            }
+
+            (None, Some(dn)) =>
+            {
+                let dir_opt = file_dialog::show_directory_dialog("");
+                if let Some(dir) = dir_opt
+                {
+                    let fr = self.save_request.take().unwrap();
+                    let ext: &str = fr.1.into();
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, dn,String::from(ext), fr.0 ));
+                }
+            },
+
+            (Some(dp), None) =>
+            {
+                let fr = self.save_request.take().unwrap();
+                let dir_opt = file_dialog::show_save_dialog(&fr.1);
+                if let Some(dir) = dir_opt
+                {
+                    let ext: &str = fr.1.into();
+                    let file_name = String::from(dir.file_name().unwrap().to_str().unwrap());
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), fr.0 ));
+                }
+            },
+
+            (None, None) =>
+            {
+                let fr = self.save_request.take().unwrap();
+                let dir_opt = file_dialog::show_save_dialog(&fr.1);
+                if let Some(dir) = dir_opt
+                {
+                    let ext: &str = fr.1.into();
+                    let file_name = String::from(dir.file_name().unwrap().to_str().unwrap());
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), fr.0 ));
+                }
+            }
+        }
     }
 
 
