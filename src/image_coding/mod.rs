@@ -3,7 +3,7 @@ use arboard::{Clipboard, ImageData};
 use image::{RgbaImage, ImageError};
 use std::sync::mpsc::{Receiver, channel};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ImageFormat { //Enum per selezione del formato
     Png,
@@ -51,11 +51,14 @@ fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>
 }
 
 
-pub fn start_thread_save_image(file_output: std::path::PathBuf, img: RgbaImage) -> Receiver<image::ImageResult<()>>
+pub fn start_thread_save_image(dir_path: std::path::PathBuf, file_name: String, extension: String, img: RgbaImage) -> Receiver<image::ImageResult<()>>
 {
     let (tx, rx ) = channel();
     std::thread::spawn(move || 
     {
+        let mut file_output = dir_path;
+        file_output.set_file_name(file_name);
+        file_output.set_extension(extension);
         tx.send(save_image(file_output, img));
     });
     rx
