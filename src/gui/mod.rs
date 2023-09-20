@@ -24,7 +24,7 @@ use main_window::MainWindow;
 use rect_selection::RectSelection;
 use std::fmt::Formatter;
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, RecvError, TryRecvError};
 use std::thread;
 use eframe::egui::{Rect, Ui};
 use image::{RgbaImage, ImageError};
@@ -160,19 +160,11 @@ impl GlobalGuiState
         if let EnumGuiState::MainWindow(ref mut mw) = self.state
         {
             //controllo l'utput della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
-            if let Some((area, delay)) = mw.update(ui, &mut self.screens_manager, ctx, frame) {
-                //if delay.delayed {
+            if let Some((area, delay)) = mw.update(ui, &mut self.screens_manager, ctx, frame)
+            {
+                frame.set_visible(false);
+                ctx.request_repaint();
                 self.waiting_delay(delay, area, frame, ctx);
-                // }
-                /* match area {
-
-                     ScreenshotDim::Fullscreen => {
-                         self.switch_to_edit_image(None, ctx, frame);
-                     }
-                     ScreenshotDim::Rectangle => {
-                         self.switch_to_rect_selection(ctx, frame);
-                     }
-                 }*/
             }
         }else {unreachable!();}
     }
@@ -282,16 +274,17 @@ impl GlobalGuiState
     }
 
     fn waiting_delay(&mut self, d: f64, area: ScreenshotDim, frame: &mut eframe::Frame,ctx: &egui::Context) {
-        if d > 0.0 {
-            let (tx, rx) = channel();
-            let th = thread::spawn(move||{
+        let (tx, rx) = channel();
+        if d > 0.0
+        {
+            frame.set_visible(false);
+            ctx.request_repaint();
+            thread::spawn(move||{
                 thread::sleep(Duration::from_secs_f64(d));
                 let _ = tx.send(true);
             });
-            self.state = EnumGuiState::WaitingForDelay(Some(rx), area.clone());
-        } else {
-            self.state = EnumGuiState::WaitingForDelay(None, area.clone());
         }
+        self.state = EnumGuiState::WaitingForDelay(Some(rx), area.clone());
     }
 
 
@@ -367,34 +360,24 @@ impl GlobalGuiState
         }else {unreachable!();}
     }
 
-    fn show_loading_delay(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame){
-        let mut go_on = false;
-        if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state{
-            if let Some(rx)=opt_rx { // se c'è il receiver è perché ho un timer
-                match rx.try_recv() {
-                    Ok(d) => {
+    fn show_loading_delay(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
+    {
+        if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state
+        {
+            if let Some(rx)=opt_rx {
+                match rx.recv() {
+                    Ok(_) => {
                         frame.set_visible(true);
-                        go_on=d;
-                        //finish=1;
-                    },
-                    Err(TryRecvError::Empty) => {
-                        frame.set_visible(false);
-                        ctx.request_repaint();
-                        //finish=0;
                     },
                     _ => {}
                 }
-            } else {
-                go_on=true;
             }
-            if go_on {
-                match area {
-                    ScreenshotDim::Fullscreen => {
-                        self.switch_to_edit_image(None, ctx, frame);
-                    }
-                    ScreenshotDim::Rectangle => {
-                        self.switch_to_rect_selection(ctx, frame);
-                    }
+            match area {
+                ScreenshotDim::Fullscreen => {
+                    self.switch_to_edit_image(None, ctx, frame);
+                }
+                ScreenshotDim::Rectangle => {
+                    self.switch_to_rect_selection(ctx, frame);
                 }
             }
         }

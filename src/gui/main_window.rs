@@ -28,7 +28,6 @@ impl MainWindow{
     pub fn update(&mut self, ui: &mut egui::Ui, screens_manager: &mut ScreensManager, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, f64)>
     {
         let mut ret = None;
-        let mut delayed: bool;
 
         ui.style_mut().animation_time = 0.0;
         egui::CentralPanel::default().show_inside(ui, |ui|
