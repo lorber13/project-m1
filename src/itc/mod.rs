@@ -1,5 +1,4 @@
-use eframe::egui::Rect;
-use std::path::PathBuf;
+
 
 
 #[derive(Debug, PartialEq)]
@@ -26,5 +25,11 @@ pub enum SettingsEvent
     Saved,
     Aborted,
     Nil
+}
+
+#[derive(Clone, Copy)]
+pub struct Delay {
+    pub delayed: bool,
+    pub scalar: f64,
 }
 

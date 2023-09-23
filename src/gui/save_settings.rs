@@ -51,7 +51,7 @@ impl SaveSettings
                 {
                     ui.horizontal(|ui|
                             {
-                                let res1 = ui.add(egui::TextEdit::singleline(&mut self.default_dir.path));
+                                ui.add(egui::TextEdit::singleline(&mut self.default_dir.path));
                                 if ui.button("📁").clicked()
                                 {
                                     match file_dialog::show_directory_dialog(&self.default_dir.path)

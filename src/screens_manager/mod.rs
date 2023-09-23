@@ -1,22 +1,23 @@
+
 use image::{RgbaImage, imageops::FilterType};
 use screenshots::{Screen, DisplayInfo};
 use std::io::Write;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Mutex, Arc};
+use std::sync::{Mutex, Arc, RwLock, RwLockReadGuard};
 
 pub struct ScreensManager
 {
-    pub screens: Vec<(Screen, Arc<Mutex<Option<RgbaImage>>>)>,
-    pub curr_screen_index: usize,
+    pub screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
+    curr_screen_index: RwLock<usize>,
     icon_width: u32
 }
 
 impl ScreensManager
 {
-    pub fn new(icon_width: u32) -> Self
+    pub fn new(icon_width: u32) -> Arc<Self>
     {
-        let screens = screenshots::Screen::all().unwrap();
-        let mut ret = Self {screens: Self::load_icons(screens, icon_width),curr_screen_index: 0, icon_width};
+        let ret = Arc::new(Self {screens: RwLock::new(vec![]),curr_screen_index: RwLock::new(0), icon_width});
+        ret.update_available_screens();
         ret.select_primary_screen();
         ret
     }
@@ -27,28 +28,55 @@ impl ScreensManager
     /// di posizione nel vettore.
     /// Nel caso lo schermo precedentemente selezionato non venga piu' rilevato,
     /// di default viene selezionato quello primario
-    pub fn update_available_screens(&mut self)
+    pub fn update_available_screens(self: &Arc<Self>) 
     {
-        let curr_id = self.screens.get::<usize>(self.curr_screen_index).unwrap().0.display_info.id;
-        self.screens = Self::load_icons(Screen::all().unwrap(), self.icon_width);
-        match self.screens.iter().position(|s|s.0.display_info.id == curr_id)
+        let arc_clone = self.clone();
+        std::thread::spawn(move||
         {
-            Some(i) => self.curr_screen_index = i,
-            None => self.select_primary_screen()
+            let curr_id = if !arc_clone.get_screens().is_empty()
+            {
+                Some(arc_clone.get_current_screen_infos().unwrap().id)
+            }else {None};
+
+            {
+                let mut write_lk = arc_clone.screens.write().unwrap();
+                for s in Screen::all().unwrap()
+                {
+                    write_lk.push((s, Mutex::new(None)));
+                }
+            }
+            arc_clone.load_icons();
+
+            if let Some(id) = curr_id
+            {
+                match arc_clone.get_screens().iter().position(|s|s.0.display_info.id == id)
+                {
+                    Some(i) => *arc_clone.curr_screen_index.write().unwrap() = i,
+                    None => arc_clone.select_primary_screen()
+                }
+            }
+            
+        });
+        
+    }
+
+    pub fn select_screen(self :&Arc<Self>, index: usize)
+    {
+        if index < self.get_screens().len()
+        {
+            *self.curr_screen_index.write().unwrap() = index;
         }
     }
-
-    pub fn select_screen(&mut self, index: usize)
-    {
-        self.curr_screen_index = index;
-    }
     
-    pub fn select_primary_screen(&mut self)
+    pub fn select_primary_screen(self :&Arc<Self>)
     {
-        self.curr_screen_index = self.screens.iter().position(|s|s.0.display_info.is_primary).unwrap();
+        if let Some(i) = self.get_screens().iter().position(|s|s.0.display_info.is_primary)
+        {
+            *self.curr_screen_index.write().unwrap() = i;
+        }   
     }
 
-    pub fn start_thread_fullscreen_screenshot(&self) -> Receiver<Result<RgbaImage, &'static str>>
+    pub fn start_thread_fullscreen_screenshot(self :&Arc<Self>) -> Receiver<Result<RgbaImage, &'static str>>
     {
         let (tx, rx) = channel();
         let sc = self.clone();
@@ -59,52 +87,60 @@ impl ScreensManager
         rx
     }
 
-    fn fullscreen_screenshot(&self) -> Result<RgbaImage, &'static str>
+    fn fullscreen_screenshot(self :&Arc<Self>) -> Result<RgbaImage, &'static str>
     {
         if crate::DEBUG {println!("DEBUG: performing fullscreen screenshot");}
         
-        match self.screens.get(self.curr_screen_index).unwrap().0.capture() 
+        match self.get_screens().get(*self.curr_screen_index.read().unwrap()).unwrap().0.capture() 
         {
             Ok(shot) => return Ok(shot),
-            Err(s) => { write!(std::io::stderr(), "Error: unable to perform screenshot: {:?}", s); return Err("Error: unable to perform screenshot"); }
+            Err(s) => { let _ = write!(std::io::stderr(), "Error: unable to perform screenshot: {:?}", s); return Err("Error: unable to perform screenshot"); }
         }
         
     }
 
-    pub fn get_current_screen_infos(&self) ->DisplayInfo
+    pub fn get_current_screen_index(self :&Arc<Self>) -> usize
     {
-        self.screens.get(self.curr_screen_index).unwrap().0.display_info
+        *self.curr_screen_index.read().unwrap()
     }
 
-    pub fn get_current_screen_icon(&self) -> Arc<Mutex<Option<RgbaImage>>>
+    ///Ritorna None nel caso le info sugli schermi non siano ancora state caricate (vettore di screen vuoto).
+    pub fn get_current_screen_infos(self :&Arc<Self>) -> Option<DisplayInfo>
     {
-        self.screens.get(self.curr_screen_index).unwrap().1.clone()
-    }
-
-    fn load_icons(v: Vec<Screen>, icon_width: u32) -> Vec<(Screen, Arc<Mutex<Option<RgbaImage>>>)>
-    {
-        let mut ret = vec![];
-        for s in v.into_iter()
+        match self.get_screens().get(*self.curr_screen_index.read().unwrap())
         {
-            let arc = Arc::new(Mutex::new(None));
-            ret.push((s, arc.clone()));
+            Some((screen, _)) => Some(screen.display_info),
+            None => None
+        }
+    }
+
+    ///Spawna un thread per ogni screen nel vettore di screen per parallelizzare la creazione di tutte le corrispondenti icone.
+    /// In particolare, ogni thread scatta uno screenshot del proprio schermo, poi ridimensiona l'immagine 
+    /// (riducendola alla dimensione specificata in ScreensManager::icon_width) e la salva nella corretta posizione all'interno
+    /// del vettore di screen.
+    fn load_icons(self: &Arc<Self>)
+    {
+        for (index, _) in self.get_screens().iter().enumerate()
+        {
+            let arc = self.clone();
             std::thread::spawn(move||
             {
+                let screens = arc.get_screens();
+                let (s, i) = screens.get(index).unwrap();
                 let img = s.capture().unwrap();
-                let height = icon_width*img.height() / img.width();
-                let icon = image::imageops::resize(&s.capture().unwrap(), icon_width, height, FilterType::Gaussian);
-                let mut g = arc.lock().unwrap();
+                let height = arc.icon_width*img.height() / img.width();
+                let icon = image::imageops::resize(&s.capture().unwrap(), arc.icon_width, height, FilterType::Gaussian);
+                let mut g = i.lock().unwrap();
                 *g = Some(icon);
             });
         }
-        ret
+    
+    }
+
+    pub fn get_screens<'a>(self: &'a Arc<Self>) -> RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>>
+    {
+       self.screens.read().unwrap()
     }
 }
 
-impl Clone for ScreensManager
-{
-    fn clone(&self) -> Self {
-        Self {screens: self.screens.clone(), curr_screen_index: self.curr_screen_index, icon_width: self.icon_width}
-    }
-}
 

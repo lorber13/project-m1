@@ -1,5 +1,5 @@
 use eframe::egui::CentralPanel;
-use crate::gui::egui::Context;
+use eframe::egui::Context;
 
 pub(crate) fn show_loading(ctx: &Context) {
     CentralPanel::default().show(ctx, |ui| {

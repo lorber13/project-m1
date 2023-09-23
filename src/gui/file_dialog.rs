@@ -7,11 +7,11 @@ use std::path::Path;
 use crate::image_coding::ImageFormat;
 
   
-pub fn show_save_dialog(format: &ImageFormat) -> Option<PathBuf>
+pub fn show_save_dialog(format: &ImageFormat, dir: Option<&str>) -> Option<PathBuf>
 {
   return FileDialog::new()
           .add_filter("image", &[(*format).into()])
-          .set_directory("/")
+          .set_directory(match dir {Some(str)=> str, None => "/"})
           .save_file();
 }
 

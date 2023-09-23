@@ -38,7 +38,7 @@ pub fn start_thread_copy_to_clipboard(img: &RgbaImage) -> Receiver<Result<(), ar
     let i = img.clone();
     std::thread::spawn(move || 
     {
-        tx.send(copy_to_clipboard(&i));
+        let _ =tx.send(copy_to_clipboard(&i));
     });
     rx
 }
@@ -59,7 +59,7 @@ pub fn start_thread_save_image(dir_path: std::path::PathBuf, file_name: String, 
         let mut file_output = dir_path;
         file_output.set_file_name(file_name);
         file_output.set_extension(extension);
-        tx.send(save_image(file_output, img));
+        let _= tx.send(save_image(file_output, img));
     });
     rx
 }

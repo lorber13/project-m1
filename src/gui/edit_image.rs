@@ -1,4 +1,4 @@
-use super::egui::ComboBox;
+use eframe::egui::ComboBox;
 use crate::image_coding::ImageFormat;
 use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
@@ -20,7 +20,7 @@ pub enum EditImageEvent {
 
 #[derive(PartialEq)]
 enum Tool {
-    Pen,
+    Line,
     Circle,
     Rect,
     Arrow,
@@ -40,7 +40,6 @@ pub struct EditImage {
     texture_handle: TextureHandle,
     annotations: Vec<Shape>,
     scale_ratio: f32,
-    line: Vec<Pos2>,
 }
 
 impl EditImage {
@@ -65,7 +64,6 @@ impl EditImage {
                 color: Color32::GREEN.gamma_multiply(0.5),
             },
             fill_shape: false,
-            line: Vec::new(),
         }
     }
 
@@ -116,7 +114,10 @@ impl EditImage {
                     circle_shape.radius *= self.scale_ratio;
                     circle_shape.stroke.width *= self.scale_ratio;
                 }
-                Shape::LineSegment { points, stroke } => {
+                Shape::LineSegment {
+                    points,
+                    stroke,
+                } => {
                     points[0].x *= self.scale_ratio;
                     points[0].x += painter.clip_rect().min.x;
                     points[0].y *= self.scale_ratio;
@@ -127,16 +128,7 @@ impl EditImage {
                     points[1].y += painter.clip_rect().min.y;
                     stroke.width *= self.scale_ratio;
                 }
-                Shape::Path(path_shape) => {
-                    path_shape.stroke.width *= self.scale_ratio;
-                    for point in path_shape.points.iter_mut() {
-                        point.x *= self.scale_ratio;
-                        point.x += painter.clip_rect().min.x;
-                        point.y *= self.scale_ratio;
-                        point.y += painter.clip_rect().min.y;
-                    }
-                }
-                _ => unreachable!(),
+                _ => {}
             }
         }
         painter.extend(new_annotations); // Do I need to redraw annotations every single frame? Yes because every frame the scaling ratio can change
@@ -178,8 +170,8 @@ impl EditImage {
                     self.stroke,
                 );
             }
-            (Tool::Pen, _) => {
-                painter.add(Shape::line(self.line.clone(), self.stroke));
+            (Tool::Line, _) => {
+                todo!()
             }
             (Tool::Arrow, _) => {
                 painter.arrow(
@@ -279,19 +271,7 @@ impl EditImage {
                     stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
                 });
             }
-            (Tool::Pen, _) => {
-                self.annotations.push(Shape::line(
-                    self.line
-                        .clone()
-                        .iter_mut()
-                        .map(|point| {
-                            scaled_point(painter.clip_rect().left_top(), self.scale_ratio, *point)
-                        })
-                        .collect(),
-                    Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
-                ));
-                self.line = Vec::new();
-            }
+            _ => todo!(),
         }
     }
     pub fn update(
@@ -306,7 +286,7 @@ impl EditImage {
                 ui.horizontal_top(|ui| {
                     ui.selectable_value(&mut self.current_shape, Tool::Rect, "rectangle");
                     ui.selectable_value(&mut self.current_shape, Tool::Circle, "circle");
-                    ui.selectable_value(&mut self.current_shape, Tool::Pen, "pen");
+                    ui.selectable_value(&mut self.current_shape, Tool::Line, "line");
                     ui.selectable_value(&mut self.current_shape, Tool::Arrow, "arrow");
                     if let Tool::Rect | Tool::Circle = self.current_shape {
                         ui.selectable_value(&mut self.fill_shape, true, "filled");
@@ -316,9 +296,10 @@ impl EditImage {
                         (Tool::Rect | Tool::Circle, true) => {
                             ui.color_edit_button_srgba(&mut self.stroke.color);
                         }
-                        (Tool::Rect | Tool::Circle, false) | (Tool::Pen, _) | (Tool::Arrow, _) => {
+                        (Tool::Rect | Tool::Circle, false) | (Tool::Line, _) | (Tool::Arrow, _) => {
                             stroke_ui(ui, &mut self.stroke, "Stroke");
                         }
+                        _ => {}
                     }
 
                     ComboBox::from_label("") //menù a tendina per la scelta del formato di output
@@ -344,15 +325,7 @@ impl EditImage {
                 let (response, painter) = self.display_window(ui);
                 if response.drag_started() {
                     self.start_drag = response.hover_pos();
-                    if let Tool::Pen = self.current_shape {
-                        self.line.push(response.hover_pos().expect(
-                            "should not panic because the pointer should be on the widget",
-                        ));
-                    }
                 } else if response.dragged() {
-                    if let Tool::Pen = self.current_shape {
-                        self.line.push(response.hover_pos().unwrap()); // todo: manage hover outside the response
-                    }
                     self.draw_shape(&painter, &response);
                 } else if response.drag_released() {
                     self.draw_shape(&painter, &response);
