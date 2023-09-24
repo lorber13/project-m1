@@ -141,7 +141,7 @@ impl GlobalGuiState
                     },
                     _ => {
                         self.alert.replace("Timer error");
-                        //self.switch_to_main_window(frame);
+                        self.switch_to_main_menu(frame);
                     }
                 }
             }
