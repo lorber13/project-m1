@@ -1,4 +1,4 @@
-use super::egui::ComboBox;
+use eframe::egui::ComboBox;
 use crate::image_coding::ImageFormat;
 use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
@@ -319,7 +319,7 @@ impl EditImage {
                         (Tool::Rect | Tool::Circle, false) | (Tool::Pen, _) | (Tool::Arrow, _) => {
                             stroke_ui(ui, &mut self.stroke, "Stroke");
                         }
-                    }
+                                            }
 
                     ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                         .selected_text(format!("{:?}", self.format))
@@ -343,8 +343,8 @@ impl EditImage {
                 ui.separator();
                 let (response, painter) = self.display_window(ui);
                 if response.drag_started() {
-                    self.start_drag = response.hover_pos();
-                    if let Tool::Pen = self.current_shape {
+                        self.start_drag = response.hover_pos();
+                        if let Tool::Pen = self.current_shape {
                         self.line.push(response.hover_pos().expect(
                             "should not panic because the pointer should be on the widget",
                         ));

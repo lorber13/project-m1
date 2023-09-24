@@ -1,7 +1,7 @@
 use eframe::egui::Window;
 
-use crate::gui::egui::Context;
-use crate::gui::egui::Pos2;
+use eframe::egui::Context;
+use eframe::egui::Pos2;
 
 pub fn show_error_alert(ctx: &Context, show: &mut Option<&'static str>)
 {
