@@ -45,7 +45,7 @@ pub enum EnumGuiState
     MainWindow(MainWindow),
     SaveSettings(SaveSettings),
     LoadingRectSelection(u64,Option<Receiver<Result<RgbaImage, &'static str>>>),
-    WaitingForDelay(Option<Receiver<bool>>, ScreenshotDim), //option perché potrebbe non esserci il canale, che viene creato solo se c'è delay
+    WaitingForDelay(Option<JoinHandle<()>>,ScreenshotDim),
     RectSelection(RectSelection),
     LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
     EditImage(EditImage, Option<Receiver<Option<PathBuf>>>),
@@ -274,17 +274,16 @@ impl GlobalGuiState
     }
 
     fn waiting_delay(&mut self, d: f64, area: ScreenshotDim, frame: &mut eframe::Frame,ctx: &egui::Context) {
-        let (tx, rx) = channel();
+        let mut jh=None;
         if d > 0.0
         {
             frame.set_visible(false);
             ctx.request_repaint();
-            thread::spawn(move||{
+            jh = Some(thread::spawn(move||{
                 thread::sleep(Duration::from_secs_f64(d));
-                let _ = tx.send(true);
-            });
+            }));
         }
-        self.state = EnumGuiState::WaitingForDelay(Some(rx), area.clone());
+        self.state = EnumGuiState::WaitingForDelay(jh, area.clone());
     }
 
 
@@ -362,14 +361,19 @@ impl GlobalGuiState
 
     fn show_loading_delay(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state
+        //if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state
+        if let EnumGuiState::WaitingForDelay(opt_jh, area)=&mut self.state
         {
-            if let Some(rx)=opt_rx {
-                match rx.recv() {
+            let temp=opt_jh.take();
+            if let Some(jh)=temp{
+                match jh.join() {
                     Ok(_) => {
                         frame.set_visible(true);
                     },
-                    _ => {}
+                    _ => {
+                        self.alert.replace("Timer error");
+                        //self.switch_to_main_window(frame);
+                    }
                 }
             }
             match area {
