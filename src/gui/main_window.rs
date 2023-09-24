@@ -20,7 +20,7 @@ impl CaptureMode{
         }
     }
 
-    pub fn update(&mut self, ui: &mut egui::Ui, screens_mgr: Arc<ScreensManager>, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, Delay)> 
+    pub fn update(&mut self, ui: &mut egui::Ui, screens_mgr: Arc<ScreensManager>, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, f64)> 
     {
         let mut ret = None;
 
@@ -58,7 +58,7 @@ impl CaptureMode{
                 if ui.button("Acquire").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
-                    ret = Some((self.area.clone(), self.delay));
+                    ret = Some((self.area.clone(), self.delay.scalar));
                 }
 
             });

@@ -1,4 +1,4 @@
-use eframe::egui::{Ui, Context, CentralPanel};
+use eframe::egui::{Ui, Context, CentralPanel, CollapsingHeader};
 use crate::{itc::{ScreenshotDim, SettingsEvent, Delay}, screens_manager::ScreensManager};
 use super::{main_window::CaptureMode, save_settings::SaveSettings};
 use std::sync::Arc;
@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 pub enum MainMenuEvent
 {
-    ScreenshotRequest(ScreenshotDim, Delay),
+    ScreenshotRequest(ScreenshotDim, f64),
     SaveConfiguration(SaveSettings)
 }
 pub enum MainMenu 
@@ -29,15 +29,19 @@ impl MainMenu
         CentralPanel::default().show(ctx, |ui|
         {
             ui.horizontal(|ui|
-                {
-                    ui.collapsing("☰", |ui|
-                    {
+            {
+                    let mut click = false;
+                    let ch = CollapsingHeader::new("☰");
+
+                    ch.show(ui, |ui| {
+                        
                         ui.vertical(|ui|
                         {
+                    
                             if ui.button("Capture").clicked()
                             {
                                 self.switch_to_main_window(frame);
-                                ui.close_menu();
+                                click = true;
                             }
                             ui.menu_button("Settings...", |ui|
                             {
@@ -45,11 +49,14 @@ impl MainMenu
                                 {
                                     ui.close_menu();
                                     self.switch_to_save_settings(save_settings);
+                                    click = true;
                                 }
-                            })
-                        })
-                        
+                            });
+                        });
                     });
+
+                    //if click {ch.open(Some(false));}
+                    
         
                     match *self
                     {

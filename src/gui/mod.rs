@@ -24,9 +24,11 @@ use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
-use std::thread;
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 use eframe::egui::Rect;
 use image::{RgbaImage, ImageError};
+use crate::itc::ScreenshotDim;
 use crate::{DEBUG, image_coding, screens_manager};
 use crate::gui::loading::show_loading;
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
@@ -39,6 +41,7 @@ use menu::MainMenu;
 pub enum EnumGuiState
 {
     MainMenu(MainMenu),
+    WaitingForDelay(Option<JoinHandle<()>>,ScreenshotDim),
     LoadingRectSelection(u64,Option<Receiver<Result<RgbaImage, &'static str>>>),
     RectSelection(RectSelection),
     LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
@@ -53,6 +56,7 @@ impl std::fmt::Debug for EnumGuiState
         match self
         {
             EnumGuiState::MainMenu(_) => write!(f, "EnumGuiState::MainMenu"),
+            EnumGuiState::WaitingForDelay(..) => write!(f, "EnumGuiState::WaitingForDelay"),
             EnumGuiState::LoadingRectSelection(..) => write!(f, "EnumGuiState::LoadingRectSelection"),
             EnumGuiState::RectSelection(..) => write!(f, "EnumGuiState::RectSelection"),
             EnumGuiState::EditImage(..) => write!(f, "EnumGuiState::EditImage"),
@@ -103,15 +107,54 @@ impl GlobalGuiState
         {
             match m.update(self.screens_manager.clone(), &self.save_settings, ctx, frame)
             {
-                Some(MainMenuEvent::ScreenshotRequest(sd, d )) => (), //to do
+                Some(MainMenuEvent::ScreenshotRequest(sd, d )) => self.start_wait_delay(d, sd, frame, ctx), 
                 Some(MainMenuEvent::SaveConfiguration(ss)) => self.save_settings = ss,
                 None => ()
             }
         }else {unreachable!();}
     }
 
+    fn start_wait_delay(&mut self, d: f64, area: ScreenshotDim, frame: &mut eframe::Frame,ctx: &eframe::egui::Context) {
+        let mut jh=None;
+        if d > 0.0
+        {
+            frame.set_visible(false);
+            ctx.request_repaint();
+            jh = Some(std::thread::spawn(move||{
+                thread::sleep(Duration::from_secs_f64(d));
+            }));
+        }
+        self.state = EnumGuiState::WaitingForDelay(jh, area.clone());
+    }
 
 
+    fn wait_delay(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
+    {
+        //if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state
+        if let EnumGuiState::WaitingForDelay(opt_jh, area)=&mut self.state
+        {
+            let temp=opt_jh.take();
+            if let Some(jh)=temp{
+                match jh.join() {
+                    Ok(_) => {
+                        frame.set_visible(true);
+                    },
+                    _ => {
+                        self.alert.replace("Timer error");
+                        //self.switch_to_main_window(frame);
+                    }
+                }
+            }
+            match area {
+                ScreenshotDim::Fullscreen => {
+                    self.switch_to_edit_image(None, ctx, frame);
+                }
+                ScreenshotDim::Rectangle => {
+                    self.switch_to_rect_selection(ctx, frame);
+                }
+            }
+        }
+    }
 
 
     /*--------------RECT SELECTION---------------------------------------- */
@@ -386,11 +429,15 @@ impl eframe::App for GlobalGuiState
             EnumGuiState::MainMenu(..) =>
             {
                 self.show_main_menu(ctx, frame);
-            }
+            },
+            EnumGuiState::WaitingForDelay(..) =>
+            {
+                self.wait_delay(ctx, frame);
+            },
             EnumGuiState::LoadingRectSelection(..) =>
             {
                 self.load_rect_selection(ctx, frame);
-            }
+            },
             EnumGuiState::RectSelection(..) => {
                     self.show_rect_selection(ctx, frame);
             }, 
