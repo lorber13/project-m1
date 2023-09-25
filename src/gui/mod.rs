@@ -1,4 +1,4 @@
-/*
+c/*
 La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
 mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState (inclusa None).
@@ -295,7 +295,18 @@ impl GlobalGuiState
             {
                 Ok(Ok(img)) => {
                     
-                    start_thread_copy_to_clipboard(&img);
+                    let rx=start_thread_copy_to_clipboard(&img);
+                    match rx.try_recv()
+                    {
+                     Ok(..) => {
+                        self.alert.replace("Image copied to clipboard!");
+                     }
+                     Err(..) => {
+                       self.alert.replace("Unable to copy the image to clipboard.");
+                       self.switch_to_main_menu(frame);
+                     }
+                    }
+
 
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);

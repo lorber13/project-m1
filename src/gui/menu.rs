@@ -35,12 +35,11 @@ impl MainMenu
             {
                     let mut click = false;
                     let ch = CollapsingHeader::new("☰");
-
-                    ch.show(ui, |ui| {
-                        
+                    ui.menu_button("☰", |ui|
+                    {
                         ui.vertical(|ui|
                         {
-                    
+
                             if ui.button("Capture").clicked()
                             {
                                 self.switch_to_main_window(frame);
@@ -63,8 +62,7 @@ impl MainMenu
                                 }
                             });
                         });
-                    });
-
+                    }).on_hover_text("Main Menu");
                     //if click {ch.open(Some(false));}
                     
         

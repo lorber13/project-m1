@@ -1,12 +1,15 @@
 use eframe::egui::Ui;
 
 use crate::itc::SettingsEvent;
+use crate::hotkeys::RegisteredHotkeys;
+use eframe::egui::KeyboardShortcut;
 
 #[derive(Clone)]
 pub struct HotkeysSettings
 {
     registering: i32,
-    alert: Option<&'static str>
+    alert: Option<&'static str>,
+    registered_hotkeys: RegisteredHotkeys
 }
 
 impl HotkeysSettings
@@ -16,13 +19,13 @@ impl HotkeysSettings
         Self {registering:-1, alert: None}
     }
 
-    pub fn update(&mut self, ui: &mut Ui) -> SettingsEvent
+    pub fn update(&mut self, ui: &mut Ui, ctx: &Context) -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
         ui.vertical(|ui|
             {
 
-                self.row_gui(ui, "fullscreen screenshot: ", 0);
+                self.row_gui(ui, "fullscreen screenshot: ", registered_hotkeys.fullscreen 0);
                 self.row_gui(ui, "rect screenshot: ", 1);
 
                 ui.separator();
@@ -49,7 +52,7 @@ impl HotkeysSettings
             ui.horizontal(|ui|
                 {
                     ui.label(label);
-
+                    ui.label()
                     ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::TOP), |ui| {
                         ui.add_enabled_ui(self.registering == row_n, |ui|
                             {
@@ -76,6 +79,29 @@ impl HotkeysSettings
         });
         
     }
+
+    fn registration_phase(&mut self, ctx: &Context) -> Option<KeyboardShortcut>
+    {
+        let mut ret = None;
+        let events = ui.input().events.clone();
+        for event in &events
+        {
+            match event
+            {
+                //la prima lettera premuta termina il processo di registrazione della hotkey
+                egui::Event::Key{key, _, modifiers}  =>  //TO DO: capire come usare pressed per migliorare la performace
+                {
+                      if modifiers.any()
+                      {
+                        ret = Some(KeyboardShortcut::new(modifiers, key));
+                      }
+                }
+                _ => ()
+            }
+        }
+        ret
+    }
+
 
 }
 impl eframe::App for Content {
@@ -104,18 +130,7 @@ impl eframe::App for Content {
     }
 }
 
-fn any_key_released(input: &egui::InputState, previous_frame_modifiers: egui::Modifiers) -> bool {
-    input.events.iter().any(|event| {
-        if let egui::Event::Key {
-            key: _key, pressed, ..
-        } = event
-        {
-            !*pressed
-        } else {
-            false
-        }
-    }) || !input.modifiers.contains(previous_frame_modifiers)
-}
+
 
 #[derive(Default)]
 struct Hotkey {
@@ -141,3 +156,16 @@ impl Display for Hotkey {
         write!(f, "{str}")
     }
 }
+
+fn any_key_released(input: &egui::InputState, previous_frame_modifiers: egui::Modifiers) -> bool {
+        input.events.iter().any(|event| {
+            if let egui::Event::Key {
+                key: _key, pressed, ..
+            } = event
+            {
+                !*pressed
+            } else {
+                false
+            }
+        }) || !input.modifiers.contains(previous_frame_modifiers)
+    }

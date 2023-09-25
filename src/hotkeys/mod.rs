@@ -3,7 +3,7 @@ use global_hotkey::hotkey::HotKey;
 
 pub struct RegisteredHotkeys
 {
-    fullscreen_screenshot: Option<HotKey>, //TO DO: implementare Dysplay per HotKey
+    fullscreen_screenshot: Option<HotKey>, //TO DO: implementare Display per HotKey
     rect_screenshot: Option<HotKey>
 }
 

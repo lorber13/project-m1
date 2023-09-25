@@ -37,7 +37,7 @@ impl CaptureMode{
                         ui.set_min_width(60.0);
                         ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
                         ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
-                    });
+                    }).response.on_hover_text("Choose the desired area");
 
 
                 ui.separator();
@@ -48,14 +48,14 @@ impl CaptureMode{
 
                 ui.separator();
 
-                ui.add(egui::Checkbox::new(&mut self.delay.delayed, "Timer"));
+                ui.add(egui::Checkbox::new(&mut self.delay.delayed, "Timer")).on_hover_text("To take a delayed screenshot");
                 if self.delay.delayed {
                     ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
                 }
 
                 ui.separator();
                 // gestione della pressione del pulsante "Acquire"
-                if ui.button("Acquire").clicked(){
+                if ui.button("Acquire").on_hover_text("After acquisition, the image is automatically copied to the clipboard").clicked(){
                     //invio, tramite Channel, di un segnale al thread principale per richiedere il salvataggio dello screenshot
                     //se l'utente ha selezionato screenshot di un'area, si fa partire il processo per la selezione dell'area 
                     ret = Some((self.area.clone(), self.delay.scalar));
