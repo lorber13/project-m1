@@ -1,33 +1,37 @@
-use std::env;
 use eframe::egui::Ui;
-use crate::itc::
+
+use crate::itc::SettingsEvent;
 
 #[derive(Clone)]
-pub struct HotekysSettings
+pub struct HotkeysSettings
 {
+    registering: i32,
+    alert: Option<&'static str>
 }
 
-impl HotekysSettings
+impl HotkeysSettings
 {
     pub fn new() -> Self
     {
-        Self {}
+        Self {registering:-1, alert: None}
     }
 
-    pub fn update(&mut self, ui: &mut Ui)
+    pub fn update(&mut self, ui: &mut Ui) -> SettingsEvent
     {
+        let mut ret = SettingsEvent::Nil;
         ui.vertical(|ui|
             {
 
-                row_gui(ui, "fullscreen screenshot: ");
-                row_gui(ui, "rect screenshot: ");
+                self.row_gui(ui, "fullscreen screenshot: ", 0);
+                self.row_gui(ui, "rect screenshot: ", 1);
 
+                ui.separator();
                 ui.horizontal(|ui|
                     {
                         if ui.button("Save").clicked() {
-                            if self.default_dir.enabled && ( self.default_dir.path.len() == 0 || !std::path::Path::new(&self.default_dir.path).exists())
+                            if self.registering >= 0
                             {
-                                self.alert = Some("invalid default directory path");
+                                self.alert = Some("Invalid operation. Please press done and then proceed");
                             }else {
                                 ret = SettingsEvent::Saved;
                             }
@@ -35,58 +39,42 @@ impl HotekysSettings
                         if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
                     })
             });
+        ret
     }
 
-    fn row_gui(ui: &mut Ui, label: &'static str)
+    fn row_gui(&mut self, ui: &mut Ui, label: &'static str, row_n: i32)
     {
-        ui.horizontal(|ui|
-            {
-                let mut save_abort_enabled = false;
-                ui.label(label);
-                if ui.button("Set hotkey").clicked()
-                {
-                    //avvia la registrazione della hotkey
-                    save_abort_enabled = true;
-                }
-
-                ui.add_enabled_ui(save_abort_enabled, |ui|
-                    {
-                        if ui.button("Done").clicked()
-                        {
-
-                        }
-                        if ui.button("Reset").clicked()
-                        {
-
-                        }
-                    })
-            });
-    }
-
-    ///Alcune combinazioni di tasti non sono valide perchè già usate dal sistema per altri scopi
-    fn validate_hotkey(h: Vec<String>) -> bool
-    {
-        match env::consts::OS
+        ui.add_enabled_ui(self.registering < 0 || self.registering == row_n, |ui|
         {
-            "linux" => validate_hotkey_linux(h),
-            "macos" => validate_hotey_macos(h),
-            "windows" => validate_hotkey_windows(h),
-            _ => false
-        }
+            ui.horizontal(|ui|
+                {
+                    ui.label(label);
+
+                    ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::TOP), |ui| {
+                        ui.add_enabled_ui(self.registering == row_n, |ui|
+                            {
+                                if ui.button("Reset").clicked()
+                                {
+                                    self.registering = -1;
+                                }
+                                if ui.button("Done").clicked() 
+                                {
+                                    self.registering = -1;
+                                }
+                                
+                            });
+                        
+                        if ui.button("Set hotkey").clicked()
+                        {
+                            //avvia la registrazione della hotkey
+                            self.registering = row_n;
+                        }  
+                    
+                    });
+                    
+                });
+        });
+        
     }
 
-    fn validate_hotkey_linux(h: Vec<String>) -> bool
-    {
-        false
-    }
-
-    fn validate_hotkey_macos(h: Vec<String>) -> bool
-    {
-        false
-    }
-
-    fn validate_hotkey_windows(h: Vec<String>) -> bool
-    {
-        false
-    }
 }

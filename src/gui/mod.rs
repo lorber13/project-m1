@@ -17,6 +17,7 @@ pub mod file_dialog;
 mod loading;
 mod edit_image;
 mod save_settings;
+mod hotkeys_settings;
 mod menu;
 
 use rect_selection::RectSelection;
@@ -34,6 +35,7 @@ use crate::gui::loading::show_loading;
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use edit_image::EditImage;
 use self::edit_image::EditImageEvent;
+use self::hotkeys_settings::HotkeysSettings;
 use self::menu::MainMenuEvent;
 use save_settings::SaveSettings;
 use menu::MainMenu;
@@ -72,7 +74,8 @@ pub struct GlobalGuiState
     alert: Option<&'static str>,
     save_request: Option<(RgbaImage, ImageFormat)>,
     screens_manager: Arc<screens_manager::ScreensManager>,
-    save_settings: SaveSettings
+    save_settings: SaveSettings,
+    hotkeys_settings: HotkeysSettings
 }
 
 
@@ -86,7 +89,8 @@ impl GlobalGuiState
             alert: None,
             save_request: None,
             screens_manager: screens_manager::ScreensManager::new(150),
-            save_settings: SaveSettings::new()
+            save_settings: SaveSettings::new(),
+            hotkeys_settings: HotkeysSettings::new()
         }
     }
 
@@ -105,10 +109,11 @@ impl GlobalGuiState
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
         {
-            match m.update(self.screens_manager.clone(), &self.save_settings, ctx, frame)
+            match m.update(self.screens_manager.clone(), &self.save_settings, &self.hotkeys_settings, ctx, frame)
             {
                 Some(MainMenuEvent::ScreenshotRequest(sd, d )) => self.start_wait_delay(d, sd, frame, ctx), 
                 Some(MainMenuEvent::SaveConfiguration(ss)) => self.save_settings = ss,
+                Some(MainMenuEvent::HotkeysConfiguration(hs)) => self.hotkeys_settings = hs,
                 None => ()
             }
         }else {unreachable!();}
@@ -130,9 +135,9 @@ impl GlobalGuiState
 
     fn wait_delay(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
-        //if let EnumGuiState::WaitingForDelay(opt_rx, area)=&mut self.state
         if let EnumGuiState::WaitingForDelay(opt_jh, area)=&mut self.state
         {
+            let area_clone = area.clone();
             let temp=opt_jh.take();
             if let Some(jh)=temp{
                 match jh.join() {
@@ -145,7 +150,7 @@ impl GlobalGuiState
                     }
                 }
             }
-            match area {
+            match area_clone {
                 ScreenshotDim::Fullscreen => {
                     self.switch_to_edit_image(None, ctx, frame);
                 }
