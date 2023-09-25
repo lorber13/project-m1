@@ -34,7 +34,6 @@ impl MainMenu
             ui.horizontal(|ui|
             {
                     let mut click = false;
-                    let ch = CollapsingHeader::new("☰");
                     ui.menu_button("☰", |ui|
                     {
                         ui.vertical(|ui|
@@ -43,6 +42,7 @@ impl MainMenu
                             if ui.button("Capture").clicked()
                             {
                                 self.switch_to_main_window(frame);
+                                ui.close_menu();
                                 click = true;
                             }
                             ui.menu_button("Settings...", |ui|
@@ -62,7 +62,7 @@ impl MainMenu
                                 }
                             });
                         });
-                    }).on_hover_text("Main Menu");
+                    }).response.on_hover_text("Main Menu");
                     //if click {ch.open(Some(false));}
                     
         
