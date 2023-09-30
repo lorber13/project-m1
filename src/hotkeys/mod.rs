@@ -1,98 +1,167 @@
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyEventReceiver, GlobalHotKeyManager};
+
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use global_hotkey::hotkey::HotKey;
+use std::str::FromStr;
+use std::rc::Rc;
+use std::sync::mpsc::{Receiver, channel};
+use std::sync::{RwLock};
+
+pub const N_HOTK: usize = 2;        //il numero di hotkey diverse presenti nella enum sottostante
+pub enum HotkeyName
+{
+    FullscreenScreenshot,
+    RectScreenshot
+}
+
+impl Into<usize> for HotkeyName
+{
+    fn into(self) -> usize
+    {
+        match self 
+        {
+            Self::FullscreenScreenshot => 0,
+            Self::RectScreenshot => 1
+        }
+    }
+}
+
+impl Into<String> for HotkeyName
+{
+    fn into(self) -> String
+    {
+        match self 
+        {
+            Self::FullscreenScreenshot => String::from("Fullscreen screenshot"),
+            Self::RectScreenshot => String::from("Rect screenshot")
+        }
+    }
+}
+
+impl From<usize> for HotkeyName
+{
+    fn from( us: usize) -> Self
+    {
+        match us
+        {
+            0 => Self::FullscreenScreenshot,
+            1 => Self::RectScreenshot,
+            _ => unreachable!("Invalid value in HotkeyName::from::<usize>()")
+        }
+    }
+}
 
 pub struct RegisteredHotkeys
 {
-    fullscreen_screenshot: Option<HotKey>, //TO DO: implementare Display per HotKey
-    rect_screenshot: Option<HotKey>
+    vec: RwLock<Vec<Option<(HotKey, String)>>>,
+    ghm: Arc<GlobalHotKeyManager>
 }
+
 
 
 impl RegisteredHotkeys
 {
-    pub fn set_fullscreen_hotkey(&mut self, h: HotKey)
+    pub fn new() -> Arc<Self>
     {
-        self.fullscreen_screenshot = Some(h);
+        let mut vec = vec![];
+        for i in 0..N_HOTK {vec.push(None);}
+        Arc::new(Self { RwLock::new(vec), ghm: Rc::new(GlobalHotKeyManager::new().unwrap()) })
     }
 
-    pub fn set_rect_hotkey(&mut self, h: HotKey)
+    pub fn create_copy(self: Arc<Self>) -> Receiver<Self>
     {
-        self.rect_screenshot = Some(h);
-    }
+        let (tx, rx) = channel();
+        let clone = self.clone();
 
-
-}
-
-
-fn main() -> Result<(), eframe::Error> {
-    thread::spawn(|| {
-            loop {
-                if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv()
+        std::thread::spawn(move||
+        {
+            let mut vec: Vec<Option<(HotKey, String)>> = vec![];
+            for opt in clone.vec.read().unwrap().iter()
+            {
+                match opt
                 {
-                    println!("tray event: {event:?}");
+                    None => vec.push(None),
+                    Some((h, s)) => vec.push(Some((h.clone(), s.clone())))
                 }
             }
-        });
 
-    eframe::run_native(
-        "My egui App",
-        options,
-        Box::new(|_cc| Box::<DefaultContent>::new(DefaultContent::new())),
-    )
-}
+            tx.send(Self {vec, ghm: clone.ghm.clone()})
+        })
 
-struct DefaultContent {
-    manager: GlobalHotKeyManager,
-    hotkey: HotKey,
-    modifier: Modifiers,
-    key: Code
-}
-
-impl DefaultContent {
-    fn new() -> Self {
-        let manager = GlobalHotKeyManager::new().unwrap();
-        let hotkey = HotKey::new(Some(Modifiers::SHIFT), Code::KeyD);
-        manager.register(hotkey).unwrap();
-        DefaultContent {
-            manager,
-            hotkey,
-            modifier: Default::default(),
-            key: Default::default(),
-        }
+        rx
     }
-}
 
-impl Default for DefaultContent {
-    fn default() -> Self {
-        Self {
-            manager: GlobalHotKeyManager::new().unwrap(),
-            hotkey: HotKey::new(Some(Modifiers::SHIFT), Code::KeyD),
-            modifier: Modifiers::SHIFT,
-            key: Code::KeyD
+
+    //TO DO: fare eseguire da un thread separato
+    pub fn register(self: Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), &'static str>
+    {
+        if let Ok(h) = HotKey::from_str(&h_str)
+        {
+            if self.ghm.register(h).is_ok() 
+            { 
+                let mut v = self.vec.write().unwrap();
+                v.get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().replace((h, h_str));
+                return Ok(());
+            } 
+            
         }
+        
+        return Err("Unable to register the hotkey");
     }
-}
 
-impl eframe::App for DefaultContent {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut self.key, Code::Digit0, "0");
-                ui.radio_value(&mut self.key, Code::Digit1, "1");
-                ui.radio_value(&mut self.key, Code::Digit2, "2");
-                ui.radio_value(&mut self.key, Code::Digit3, "3");
-                ui.radio_value(&mut self.key, Code::Digit4, "4");
-                ui.radio_value(&mut self.key, Code::Digit5, "5");
-                ui.radio_value(&mut self.key, Code::Digit6, "6");
-                ui.radio_value(&mut self.key, Code::Digit7, "7");
-                ui.radio_value(&mut self.key, Code::Digit8, "8");
-                ui.radio_value(&mut self.key, Code::Digit9, "9");
-            });
-            if ui.button("set").clicked() {
-                self.manager.unregister(self.hotkey).unwrap();
-                self.hotkey = HotKey::new(None, self.key);
-                self.manager.register(self.hotkey).unwrap();
+    //TO DO: fare eseguire da un thread separato
+    pub fn unregister(self: Arc<Self>, name: HotkeyName) -> Result<(), &'static str>
+    {
+        let temp = self.vec.read().get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().take();
+        if let Some((h, s)) = temp 
+        {
+            if self.ghm.unregister(h).is_ok()
+            {
+                return Ok(());
             }
-        });
+        }
+        return Err("Unable to unregister the hotkey ");
+    }
+
+    pub fn listen_hotkeys(self: Arc<Self>) -> Option<HotkeyName>
+    {
+        if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv()
+        {
+            for (i, opt) in self.vec.read().unwrap().iter().enumerate()
+            {
+                match opt
+                {
+                    None => (),
+                    Some((h, _)) =>
+                    {
+                        if h.id() == event.id
+                        {
+                            return Some(HotkeyName::from(i));
+                        }
+                    }
+                    
+                }
+                
+            }
+        }
+
+        return None;
+    }
+
+    pub fn get_string(self: Arc<Self>, name: HotkeyName) -> Option<String>
+    {
+        if let Some(opt) = self.vec.read().unwrap().get(<HotkeyName as Into<usize>>::into(name))
+        {
+            match opt
+            {
+                None => None,
+                Some((hk, hk_str)) => Some(String::clone(hk_str))
+            }
+        }else {None}
+        
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> core::slice::IterMut<'a, Option<(HotKey, String)>>
+    {
+        self.vec.write().unwrap().iter_mut()
     }
 }

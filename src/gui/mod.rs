@@ -1,4 +1,4 @@
-c/*
+/*
 La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
 mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState (inclusa None).
@@ -39,6 +39,8 @@ use self::hotkeys_settings::HotkeysSettings;
 use self::menu::MainMenuEvent;
 use save_settings::SaveSettings;
 use menu::MainMenu;
+use crate::hotkeys::RegisteredHotkeys;
+use std::rc::Rc;
 
 pub enum EnumGuiState
 {
@@ -75,7 +77,7 @@ pub struct GlobalGuiState
     save_request: Option<(RgbaImage, ImageFormat)>,
     screens_manager: Arc<screens_manager::ScreensManager>,
     save_settings: SaveSettings,
-    hotkeys_settings: HotkeysSettings
+    registered_hotkeys: Rc<RegisteredHotkeys>
 }
 
 
@@ -90,7 +92,7 @@ impl GlobalGuiState
             save_request: None,
             screens_manager: screens_manager::ScreensManager::new(150),
             save_settings: SaveSettings::new(),
-            hotkeys_settings: HotkeysSettings::new()
+            registered_hotkeys: Rc::new(RegisteredHotkeys::new())
         }
     }
 
@@ -109,11 +111,11 @@ impl GlobalGuiState
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
         {
-            match m.update(self.screens_manager.clone(), &self.save_settings, &self.hotkeys_settings, ctx, frame)
+            match m.update(self.screens_manager.clone(), &self.save_settings, &self.registered_hotkeys, ctx, frame)
             {
                 Some(MainMenuEvent::ScreenshotRequest(sd, d )) => self.start_wait_delay(d, sd, frame, ctx), 
                 Some(MainMenuEvent::SaveConfiguration(ss)) => self.save_settings = ss,
-                Some(MainMenuEvent::HotkeysConfiguration(hs)) => self.hotkeys_settings = hs,
+                Some(MainMenuEvent::HotkeysConfiguration(rh)) => self.registered_hotkeys = Rc::new(rh),
                 None => ()
             }
         }else {unreachable!();}
@@ -296,6 +298,17 @@ impl GlobalGuiState
                 Ok(Ok(img)) => {
                     
                     let rx=start_thread_copy_to_clipboard(&img);
+                    match rx.try_recv()
+                    {
+                     Ok(..) => {
+                        self.alert.replace("Image copied to clipboard!");
+                     }
+                     Err(..) => {
+                       self.alert.replace("Unable to copy the image to clipboard.");
+                       self.switch_to_main_menu(frame);
+                     }
+                    }
+
 
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);

@@ -1,5 +1,5 @@
 use eframe::egui::{Ui, Context, CentralPanel, CollapsingHeader};
-use crate::{itc::{ScreenshotDim, SettingsEvent}, screens_manager::ScreensManager};
+use crate::{itc::{ScreenshotDim, SettingsEvent}, screens_manager::ScreensManager, hotkeys::RegisteredHotkeys};
 use super::{main_window::CaptureMode, save_settings::SaveSettings};
 use std::sync::Arc;
 use super::hotkeys_settings::HotkeysSettings;
@@ -9,13 +9,14 @@ pub enum MainMenuEvent
 {
     ScreenshotRequest(ScreenshotDim, f64),
     SaveConfiguration(SaveSettings),
-    HotkeysConfiguration(HotkeysSettings)
+    HotkeysConfiguration(RegisteredHotkeys)
 }
 pub enum MainMenu 
 {
     MainWindow(CaptureMode),
     SaveSettings(SaveSettings),
-    HotkeysSettings(HotkeysSettings)
+    LoadingHotkeySettings(Receiver(RegisteredHotkeys)),
+    HotkeysSettings(HotkeysSettings, RegisteredHotkeys)
 }
 
 impl MainMenu
@@ -26,7 +27,7 @@ impl MainMenu
         Self::MainWindow(CaptureMode::new())
     }
 
-    pub fn update(&mut self, screens_mgr: Arc<ScreensManager>, save_settings: &SaveSettings, hotkeys_settings: &HotkeysSettings, ctx: &Context, frame: &mut eframe::Frame) -> Option<MainMenuEvent>
+    pub fn update(&mut self, screens_mgr: Arc<ScreensManager>, save_settings: &SaveSettings, registered_hotkeys: &RegisteredHotkeys, ctx: &Context, frame: &mut eframe::Frame) -> Option<MainMenuEvent>
     {
         let mut ret = None;
         CentralPanel::default().show(ctx, |ui|
@@ -34,6 +35,7 @@ impl MainMenu
             ui.horizontal(|ui|
             {
                     let mut click = false;
+                    let ch = CollapsingHeader::new("☰");
                     ui.menu_button("☰", |ui|
                     {
                         ui.vertical(|ui|
@@ -42,7 +44,6 @@ impl MainMenu
                             if ui.button("Capture").clicked()
                             {
                                 self.switch_to_main_window(frame);
-                                ui.close_menu();
                                 click = true;
                             }
                             ui.menu_button("Settings...", |ui|
@@ -57,12 +58,12 @@ impl MainMenu
                                 if ui.button("Hotkeys Settings").clicked()
                                 {
                                     ui.close_menu();
-                                    self.switch_to_hotkeys_settings(hotkeys_settings);
+                                    self.switch_to_hotkeys_settings(registered_hotkeys);
                                     click = true;
                                 }
                             });
                         });
-                    }).response.on_hover_text("Main Menu");
+                    });
                     //if click {ch.open(Some(false));}
                     
         
@@ -70,7 +71,7 @@ impl MainMenu
                     {
                         Self::MainWindow(_) => ret = self.show_main_window(screens_mgr, ui, ctx, frame),
                         Self::SaveSettings(_) => ret = self.show_save_settings( ui, ctx, frame),
-                        Self::HotkeysSettings(_) => ret = self.show_hotkeys_settings( ui, ctx, frame)
+                        Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, ctx, frame)
                     }
         
                 });
@@ -124,20 +125,20 @@ impl MainMenu
     }
 
      //-----------------------------HOTKEYS SETTINGS-------------------------------------------------------------------
-     fn switch_to_hotkeys_settings(&mut self, hotkeys_settings: &HotkeysSettings) 
+     fn switch_to_hotkeys_settings(&mut self, registered_hotkeys: &RegisteredHotkeys) 
      {
          if crate::DEBUG {print!("DEBUG: switch to hotkeys settings");}
-         *self = Self::HotkeysSettings(hotkeys_settings.clone()); //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+         *self = Self::HotkeysSettings(HotkeysSettings::new(), registered_hotkeys.create_copy()); //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
      }
  
      fn show_hotkeys_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> Option<MainMenuEvent>
      {
          let mut ret = None;
-         if let Self::HotkeysSettings(hs) = self
+         if let Self::HotkeysSettings(hs, rh) = self
          {
-             match hs.update(ui)
+             match hs.update(ui, rh, ctx)
              {
-                 SettingsEvent::Saved => { ret = Some(MainMenuEvent::HotkeysConfiguration(hs.clone())); self.switch_to_main_window(frame); },
+                 SettingsEvent::Saved => { ret = Some(MainMenuEvent::HotkeysConfiguration(rh.create_copy())); self.switch_to_main_window(frame); },
                  SettingsEvent::Aborted => self.switch_to_main_window(frame),
                  SettingsEvent::Nil => ()
              }  
