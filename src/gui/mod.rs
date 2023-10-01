@@ -298,17 +298,6 @@ impl GlobalGuiState
                 Ok(Ok(img)) => {
                     
                     let rx=start_thread_copy_to_clipboard(&img);
-                    match rx.try_recv()
-                    {
-                     Ok(..) => {
-                        self.alert.replace("Image copied to clipboard!");
-                     }
-                     Err(..) => {
-                       self.alert.replace("Unable to copy the image to clipboard.");
-                       self.switch_to_main_menu(frame);
-                     }
-                    }
-
 
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);

@@ -4,7 +4,7 @@ use global_hotkey::hotkey::HotKey;
 use std::str::FromStr;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, channel};
-use std::sync::{RwLock};
+use std::sync::{Arc, RwLock};
 
 pub const N_HOTK: usize = 2;        //il numero di hotkey diverse presenti nella enum sottostante
 pub enum HotkeyName
@@ -64,7 +64,7 @@ impl RegisteredHotkeys
     {
         let mut vec = vec![];
         for i in 0..N_HOTK {vec.push(None);}
-        Arc::new(Self { RwLock::new(vec), ghm: Rc::new(GlobalHotKeyManager::new().unwrap()) })
+        Arc::new(Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()) })
     }
 
     pub fn create_copy(self: Arc<Self>) -> Receiver<Self>
@@ -84,8 +84,8 @@ impl RegisteredHotkeys
                 }
             }
 
-            tx.send(Self {vec, ghm: clone.ghm.clone()})
-        })
+            tx.send(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone()})
+        });
 
         rx
     }
