@@ -24,7 +24,8 @@ pub enum SettingsEvent
 {
     Saved,
     Aborted,
-    Nil
+    Nil,
+    Error(&'static str)
 }
 
 #[derive(Clone, Copy)]

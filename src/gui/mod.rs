@@ -35,12 +35,10 @@ use crate::gui::loading::show_loading;
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use edit_image::EditImage;
 use self::edit_image::EditImageEvent;
-use self::hotkeys_settings::HotkeysSettings;
 use self::menu::MainMenuEvent;
 use save_settings::SaveSettings;
 use menu::MainMenu;
-use crate::hotkeys::RegisteredHotkeys;
-use std::rc::Rc;
+use crate::hotkeys::{RegisteredHotkeys, HotkeyName};
 
 pub enum EnumGuiState
 {
@@ -77,7 +75,7 @@ pub struct GlobalGuiState
     save_request: Option<(RgbaImage, ImageFormat)>,
     screens_manager: Arc<screens_manager::ScreensManager>,
     save_settings: SaveSettings,
-    registered_hotkeys: Rc<RegisteredHotkeys>
+    registered_hotkeys: Arc<RegisteredHotkeys>
 }
 
 
@@ -92,7 +90,7 @@ impl GlobalGuiState
             save_request: None,
             screens_manager: screens_manager::ScreensManager::new(150),
             save_settings: SaveSettings::new(),
-            registered_hotkeys: Rc::new(RegisteredHotkeys::new())
+            registered_hotkeys: RegisteredHotkeys::new()
         }
     }
 
@@ -111,12 +109,13 @@ impl GlobalGuiState
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
         {
-            match m.update(self.screens_manager.clone(), &self.save_settings, &self.registered_hotkeys, ctx, frame)
+            match m.update(self.screens_manager.clone(), &self.save_settings, self.registered_hotkeys.clone(), ctx, frame)
             {
-                Some(MainMenuEvent::ScreenshotRequest(sd, d )) => self.start_wait_delay(d, sd, frame, ctx), 
-                Some(MainMenuEvent::SaveConfiguration(ss)) => self.save_settings = ss,
-                Some(MainMenuEvent::HotkeysConfiguration(rh)) => self.registered_hotkeys = Rc::new(rh),
-                None => ()
+                MainMenuEvent::ScreenshotRequest(sd, d ) => self.start_wait_delay(d, sd, frame, ctx), 
+                MainMenuEvent::SaveConfiguration(ss) => self.save_settings = ss,
+                MainMenuEvent::HotkeysConfiguration(rh) => self.registered_hotkeys = rh.clone(),
+                MainMenuEvent::Error(e) => {self.alert.replace(e);}
+                MainMenuEvent::Nil => ()
             }
         }else {unreachable!();}
     }
@@ -416,6 +415,16 @@ impl GlobalGuiState
             }
         }else {unreachable!();}
     }
+
+
+    fn hotkey_reaction(&mut self, hn: HotkeyName, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
+    {
+        match hn
+        {
+            HotkeyName::FullscreenScreenshot => self.switch_to_edit_image(None, ctx, frame),
+            HotkeyName::RectScreenshot => self.switch_to_rect_selection(ctx, frame)
+        }
+    }
     
 }
 
@@ -439,6 +448,12 @@ impl eframe::App for GlobalGuiState
         if crate::DEBUG {print!("gui refresh. ");}
         
         error_alert::show_error_alert(ctx, &mut self.alert);
+
+        match self.registered_hotkeys.listen_hotkeys()
+        {
+            None => (),
+            Some(hn) => self.hotkey_reaction(hn, ctx, frame)
+        }
 
         if crate::DEBUG {println!("state = {:?}", self.state);}
 
