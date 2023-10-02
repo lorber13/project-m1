@@ -2,7 +2,6 @@
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use global_hotkey::hotkey::HotKey;
 use std::str::FromStr;
-use std::rc::Rc;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, RwLock};
 
@@ -52,7 +51,7 @@ impl From<usize> for HotkeyName
 
 pub struct RegisteredHotkeys
 {
-    vec: RwLock<Vec<Option<(HotKey, String)>>>,
+    pub vec: RwLock<Vec<Option<(HotKey, String)>>>,
     ghm: Arc<GlobalHotKeyManager>
 }
 
@@ -63,11 +62,12 @@ impl RegisteredHotkeys
     pub fn new() -> Arc<Self>
     {
         let mut vec = vec![];
-        for i in 0..N_HOTK {vec.push(None);}
-        Arc::new(Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()) })
+        for _ in 0..N_HOTK {vec.push(None);}
+        let ret = Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()) };
+        Arc::new(ret)
     }
 
-    pub fn create_copy(self: Arc<Self>) -> Receiver<Self>
+    pub fn create_copy(self: &Arc<Self>) -> Receiver<Arc<Self>>
     {
         let (tx, rx) = channel();
         let clone = self.clone();
@@ -84,7 +84,7 @@ impl RegisteredHotkeys
                 }
             }
 
-            tx.send(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone()})
+            tx.send(Arc::new(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone()}))
         });
 
         rx
@@ -92,7 +92,7 @@ impl RegisteredHotkeys
 
 
     //TO DO: fare eseguire da un thread separato
-    pub fn register(self: Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), &'static str>
+    pub fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), &'static str>
     {
         if let Ok(h) = HotKey::from_str(&h_str)
         {
@@ -109,10 +109,10 @@ impl RegisteredHotkeys
     }
 
     //TO DO: fare eseguire da un thread separato
-    pub fn unregister(self: Arc<Self>, name: HotkeyName) -> Result<(), &'static str>
+    pub fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), &'static str>
     {
-        let temp = self.vec.read().get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().take();
-        if let Some((h, s)) = temp 
+        let temp = self.vec.write().unwrap().get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().take();
+        if let Some((h, _)) = temp 
         {
             if self.ghm.unregister(h).is_ok()
             {
@@ -122,7 +122,7 @@ impl RegisteredHotkeys
         return Err("Unable to unregister the hotkey ");
     }
 
-    pub fn listen_hotkeys(self: Arc<Self>) -> Option<HotkeyName>
+    pub fn listen_hotkeys(self: &Arc<Self>) -> Option<HotkeyName>
     {
         if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv()
         {
@@ -147,21 +147,16 @@ impl RegisteredHotkeys
         return None;
     }
 
-    pub fn get_string(self: Arc<Self>, name: HotkeyName) -> Option<String>
+    pub fn get_string(self: &Arc<Self>, name: HotkeyName) -> Option<String>
     {
         if let Some(opt) = self.vec.read().unwrap().get(<HotkeyName as Into<usize>>::into(name))
         {
             match opt
             {
                 None => None,
-                Some((hk, hk_str)) => Some(String::clone(hk_str))
+                Some((_, hk_str)) => Some(String::clone(hk_str))
             }
         }else {None}
         
-    }
-
-    pub fn iter_mut<'a>(&'a mut self) -> core::slice::IterMut<'a, Option<(HotKey, String)>>
-    {
-        self.vec.write().unwrap().iter_mut()
     }
 }
