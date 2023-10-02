@@ -1,8 +1,9 @@
-use eframe::egui::{Ui, Context, Event};
+use eframe::egui::{Ui, Event};
 
 use crate::itc::SettingsEvent;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName, self};
 use eframe::egui::KeyboardShortcut;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct HotkeysSettings
@@ -18,19 +19,25 @@ impl HotkeysSettings
         Self {registering:-1, alert: None}
     }
 
-    pub fn update(&mut self, ui: &mut Ui, registered_hotkeys: &mut RegisteredHotkeys, ctx: &Context) -> SettingsEvent
+    pub fn update(&mut self, ui: &mut Ui, registered_hotkeys: Arc<RegisteredHotkeys>) -> SettingsEvent
     {
+        let mut ret = SettingsEvent::Nil;
+
+
         //controllo se è in corso la registrazione di una hotkey
         if self.registering >= 0
         {
-            if let Some(new_hk) = self.registration_phase(ui, ctx)
+            if let Some(new_hk) = self.registration_phase(ui)
             {
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
-                registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize));
+                if let Err(e) = registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize))
+                {
+                    return SettingsEvent::Error(e);
+                }
                 self.registering = -1;
             }
         }
-        let mut ret = SettingsEvent::Nil;
+        
         ui.vertical(|ui|
             {
 
@@ -42,10 +49,13 @@ impl HotkeysSettings
 
                     ui.horizontal(|ui|
                     {
-                        self.row_gui(ui, label, value, i, ctx);
+                        self.row_gui(ui, label, value, i);
                         if ui.button("Delete hotkey").clicked()
                         {
-                            registered_hotkeys.unregister(HotkeyName::from(i));
+                            if let Err(e) = registered_hotkeys.unregister(HotkeyName::from(i))
+                            {
+                                ret = SettingsEvent::Error(e);
+                            }
                         }
                     });
                 }
@@ -67,7 +77,7 @@ impl HotkeysSettings
         ret
     }
 
-    fn row_gui(&mut self, ui: &mut Ui, label: String, value: String, row_n: usize, ctx: &Context)
+    fn row_gui(&mut self, ui: &mut Ui, label: String, value: String, row_n: usize)
     {
         ui.add_enabled_ui(self.registering < 0 || self.registering as usize == row_n, |ui|
         {
@@ -89,7 +99,7 @@ impl HotkeysSettings
         
     }
 
-    fn registration_phase(&mut self, ui: &mut Ui, ctx: &Context) -> Option<KeyboardShortcut>
+    fn registration_phase(&mut self, ui: &mut Ui) -> Option<KeyboardShortcut>
     {
         let mut ret = None;
         let events = ui.input(|i| {i.events.clone()});
@@ -98,7 +108,7 @@ impl HotkeysSettings
             match event
             {
                 //la prima lettera premuta termina il processo di registrazione della hotkey
-                Event::Key{key, pressed, modifiers, repeat}  =>  //TO DO: capire come usare pressed per migliorare la performace
+                Event::Key{key, pressed: _ , modifiers, repeat}  =>  //TO DO: capire come usare pressed per migliorare la performace
                 {
                       if modifiers.any() && *repeat == false
                       {
