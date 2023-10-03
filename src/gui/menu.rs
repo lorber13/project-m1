@@ -46,6 +46,7 @@ impl MainMenu
 
                             if ui.button("Capture").clicked()
                             {
+                                ui.close_menu();
                                 self.switch_to_main_window(frame);
                                 click = true;
                             }
