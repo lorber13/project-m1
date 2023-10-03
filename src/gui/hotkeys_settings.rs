@@ -72,6 +72,7 @@ impl HotkeysSettings
                             }
                         }
                         if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
+                        ui.button("?").on_hover_text("Help: Click at least one modifier + one alphanumeric key to register a new hotkey.");
                     })
             });
         ret
