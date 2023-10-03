@@ -66,7 +66,7 @@ impl MainMenu
                                 }
                             });
                         });
-                    });
+                    }).response.on_hover_text("Main Menu");
                     //if click {ch.open(Some(false));}
                     
         
