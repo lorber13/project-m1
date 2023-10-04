@@ -40,6 +40,7 @@ impl ScreensManager
 
             {
                 let mut write_lk = arc_clone.screens.write().unwrap();
+                write_lk.clear();
                 for s in Screen::all().unwrap()
                 {
                     write_lk.push((s, Mutex::new(None)));

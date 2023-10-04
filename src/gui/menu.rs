@@ -46,7 +46,6 @@ impl MainMenu
 
                             if ui.button("Capture").clicked()
                             {
-                                ui.close_menu();
                                 self.switch_to_main_window(frame);
                                 click = true;
                             }
@@ -67,7 +66,7 @@ impl MainMenu
                                 }
                             });
                         });
-                    }).response.on_hover_text("Main Menu");
+                    });
                     //if click {ch.open(Some(false));}
                     
         
@@ -75,7 +74,7 @@ impl MainMenu
                     {
                         Self::MainWindow(_) => ret = self.show_main_window(screens_mgr, ui, ctx, frame),
                         Self::SaveSettings(_) => ret = self.show_save_settings( ui, ctx, frame),
-                        Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, frame),
+                        Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, ctx,frame),
                         Self::LoadingHotkeysSettings(..) => ret = self.load_hotkeys_settings()
                     }
         
@@ -153,7 +152,7 @@ impl MainMenu
         {
             match r.try_recv()
             {
-                Ok(rh) => *self = Self::HotkeysSettings(HotkeysSettings::new(), rh), //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+                Ok(rh) => *self = Self::HotkeysSettings(HotkeysSettings::new(rh.clone()), rh), //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
                 Err(TryRecvError::Disconnected) => ret= MainMenuEvent::Error("Loading failed"),
                 Err(TryRecvError::Empty) => ()
             }
@@ -161,12 +160,12 @@ impl MainMenu
         ret
      }
  
-     fn show_hotkeys_settings(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) -> MainMenuEvent
+     fn show_hotkeys_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
      {
          let mut ret = MainMenuEvent::Nil;
          if let Self::HotkeysSettings(hs, rh) = self
          {
-             match hs.update(ui, rh.clone())
+             match hs.update(ui, ctx)
              {
                  SettingsEvent::Saved => { ret = MainMenuEvent::HotkeysConfiguration(rh.clone()); self.switch_to_main_window(frame); },
                  SettingsEvent::Aborted => self.switch_to_main_window(frame),

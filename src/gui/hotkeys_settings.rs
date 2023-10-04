@@ -1,27 +1,34 @@
-use eframe::egui::{Ui, Event};
+use eframe::egui::{Ui, Event, Context};
 
 use crate::itc::SettingsEvent;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName, self};
 use eframe::egui::KeyboardShortcut;
+use std::io::stderr;
+use std::io::Write;
 use std::sync::Arc;
+
+use super::error_alert;
 
 #[derive(Clone)]
 pub struct HotkeysSettings
 {
     registering: i32,
     alert: Option<&'static str>,
+    registered_hotkeys: Arc<RegisteredHotkeys>
 }
 
 impl HotkeysSettings
 {
-    pub fn new() -> Self
+    pub fn new(registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
     {
-        Self {registering:-1, alert: None}
+        Self {registering:-1, alert: None, registered_hotkeys}
     }
 
-    pub fn update(&mut self, ui: &mut Ui, registered_hotkeys: Arc<RegisteredHotkeys>) -> SettingsEvent
+    pub fn update(&mut self, ui: &mut Ui, ctx: &Context) -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
+
+        error_alert::show_error_alert(ctx, &mut self.alert);
 
 
         //controllo se è in corso la registrazione di una hotkey
@@ -30,7 +37,7 @@ impl HotkeysSettings
             if let Some(new_hk) = self.registration_phase(ui)
             {
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
-                if let Err(e) = registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize))
+                if let Err(e) = self.registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize))
                 {
                     return SettingsEvent::Error(e);
                 }
@@ -45,19 +52,9 @@ impl HotkeysSettings
                 {
                     let mut label: String = HotkeyName::from(i).into();
                     label.push_str(": ");
-                    let value = match registered_hotkeys.get_string(HotkeyName::from(i)) {Some(str) => str.clone(), None => String::from("")};
+                    let value = match self.registered_hotkeys.get_string(HotkeyName::from(i)) {Some(str) => str.clone(), None => String::from("")};
 
-                    ui.horizontal(|ui|
-                    {
-                        self.row_gui(ui, label, value, i);
-                        if ui.button("Delete hotkey").clicked()
-                        {
-                            if let Err(e) = registered_hotkeys.unregister(HotkeyName::from(i))
-                            {
-                                ret = SettingsEvent::Error(e);
-                            }
-                        }
-                    });
+                    self.row_gui(ui, label, value, i);
                 }
 
                 ui.separator();
@@ -72,7 +69,6 @@ impl HotkeysSettings
                             }
                         }
                         if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
-                        ui.button("?").on_hover_text("Help: Click at least one modifier + one alphanumeric key to register a new hotkey.");
                     })
             });
         ret
@@ -87,13 +83,26 @@ impl HotkeysSettings
                     ui.label(label);
                     ui.label(value);
                     
+                    ui.with_layout(eframe::egui::Layout::right_to_left(eframe::egui::Align::TOP), |ui|
+                    {   
+
+                        if ui.button("Delete hotkey").clicked()
+                        {
+                            if let Err(e) = self.registered_hotkeys.unregister(HotkeyName::from(row_n))
+                            {
+                                self.alert.replace("Error: unable to complete the operation");
+                                write!(stderr(), "Err = {}", e);
+                            }
+                        } 
+
                         
                         if ui.button("Set hotkey").clicked()
                         {
                             //avvia la registrazione della hotkey
                             self.registering = row_n as i32;
-                        }  
-                    
+                        }
+ 
+                    });
                     
                 });
         });
