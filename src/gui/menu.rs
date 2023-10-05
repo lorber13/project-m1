@@ -70,14 +70,18 @@ impl MainMenu
                     //if click {ch.open(Some(false));}
                     
         
-                    match *self
+                    ui.vertical(|ui|
                     {
-                        Self::MainWindow(_) => ret = self.show_main_window(screens_mgr, ui, ctx, frame),
-                        Self::SaveSettings(_) => ret = self.show_save_settings( ui, ctx, frame),
-                        Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, ctx,frame),
-                        Self::LoadingHotkeysSettings(..) => ret = self.load_hotkeys_settings()
-                    }
-        
+                        ui.add_space(5.0);
+
+                        match *self
+                        {
+                            Self::MainWindow(_) => ret = self.show_main_window(screens_mgr, ui, ctx, frame),
+                            Self::SaveSettings(_) => ret = self.show_save_settings( ui, ctx, frame),
+                            Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, ctx,frame),
+                            Self::LoadingHotkeysSettings(..) => ret = self.load_hotkeys_settings()
+                        }
+                    });
                 });
         });
         

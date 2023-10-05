@@ -69,8 +69,22 @@ impl HotkeysSettings
                             }
                         }
                         if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
-                    })
+                    });
+
+                if self.registering >= 0
+                {
+                    ui.vertical(|ui|
+                    {
+                        ui.add_space(50.0);
+                        ui.horizontal(|ui|
+                        {
+                            ui.heading("?");
+                            ui.code("HELP: press at least one modifier and an alphabetic key.\nThe letter must be the last button to be pressed.");
+                        })
+                    });
+                }
             });
+
         ret
     }
 
