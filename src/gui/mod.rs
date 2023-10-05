@@ -115,7 +115,7 @@ impl GlobalGuiState
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
         {
-            match m.update(self.screens_manager.clone(), &self.save_settings, self.registered_hotkeys.clone(), ctx, frame)
+            match m.update(self.alert.clone(), self.screens_manager.clone(), &self.save_settings, self.registered_hotkeys.clone(), ctx, frame)
             {
                 MainMenuEvent::ScreenshotRequest(sd, d ) => self.start_wait_delay(d, sd, frame, ctx), 
                 MainMenuEvent::SaveConfiguration(ss) => self.save_settings = ss,

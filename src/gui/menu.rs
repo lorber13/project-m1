@@ -1,7 +1,7 @@
 use eframe::egui::{Ui, Context, CentralPanel};
 use crate::{itc::{ScreenshotDim, SettingsEvent}, screens_manager::ScreensManager, hotkeys::RegisteredHotkeys};
 use super::{main_window::CaptureMode, save_settings::SaveSettings};
-use std::sync::{Arc, mpsc::TryRecvError};
+use std::{sync::{Arc, mpsc::TryRecvError}, cell::RefCell};
 use super::hotkeys_settings::HotkeysSettings;
 use std::sync::mpsc::Receiver;
 
@@ -30,7 +30,7 @@ impl MainMenu
         Self::MainWindow(CaptureMode::new())
     }
 
-    pub fn update(&mut self, screens_mgr: Arc<ScreensManager>, save_settings: &SaveSettings, registered_hotkeys: Arc<RegisteredHotkeys>, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+    pub fn update(&mut self, alert: RefCell<Option<&'static str>>, screens_mgr: Arc<ScreensManager>, save_settings: &SaveSettings, registered_hotkeys: Arc<RegisteredHotkeys>, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
     {
         let mut ret = MainMenuEvent::Nil;
         CentralPanel::default().show(ctx, |ui|
@@ -76,9 +76,9 @@ impl MainMenu
 
                         match *self
                         {
-                            Self::MainWindow(_) => ret = self.show_main_window(screens_mgr, ui, ctx, frame),
-                            Self::SaveSettings(_) => ret = self.show_save_settings( ui, ctx, frame),
-                            Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( ui, ctx,frame),
+                            Self::MainWindow(_) => ret = self.show_main_window(alert, screens_mgr, ui, ctx, frame),
+                            Self::SaveSettings(_) => ret = self.show_save_settings( alert, ui, ctx, frame),
+                            Self::HotkeysSettings(..) => ret = self.show_hotkeys_settings( alert, ui, ctx,frame),
                             Self::LoadingHotkeysSettings(..) => ret = self.load_hotkeys_settings()
                         }
                     });
@@ -96,13 +96,13 @@ impl MainMenu
         *self = Self::MainWindow(CaptureMode::new());
     }
 
-    fn show_main_window(&mut self, screens_mgr: Arc<ScreensManager>, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+    fn show_main_window(&mut self,alert: RefCell<Option<&'static str>>, screens_mgr: Arc<ScreensManager>, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
     {
         let mut ret = MainMenuEvent::Nil;
         if let Self::MainWindow(ref mut mw) = self
         {
             //controllo l'utput della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
-            if let Some((area, delay)) = mw.update(ui, screens_mgr, ctx, frame) {
+            if let Some((area, delay)) = mw.update(alert, ui, screens_mgr, ctx, frame) {
                 ret= MainMenuEvent::ScreenshotRequest(area, delay);
             }
         }else {unreachable!();}
@@ -121,12 +121,12 @@ impl MainMenu
         
     }
 
-    fn show_save_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+    fn show_save_settings(&mut self,alert: RefCell<Option<&'static str>>, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
     {
         let mut ret = MainMenuEvent::Nil;
         if let Self::SaveSettings(ss) = self
         {
-            match ss.update(ui, ctx)
+            match ss.update(alert, ui, ctx)
             {
                 SettingsEvent::Saved => { ret = MainMenuEvent::SaveConfiguration(ss.clone()); self.switch_to_main_window(frame); },
                 SettingsEvent::Aborted => self.switch_to_main_window(frame),
@@ -164,12 +164,12 @@ impl MainMenu
         ret
      }
  
-     fn show_hotkeys_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+     fn show_hotkeys_settings(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
      {
          let mut ret = MainMenuEvent::Nil;
          if let Self::HotkeysSettings(hs, rh) = self
          {
-             match hs.update(ui, ctx)
+             match hs.update(alert, ui, ctx)
              {
                  SettingsEvent::Saved => { ret = MainMenuEvent::HotkeysConfiguration(rh.clone()); self.switch_to_main_window(frame); },
                  SettingsEvent::Aborted => self.switch_to_main_window(frame),

@@ -6,6 +6,7 @@ use eframe::egui::KeyboardShortcut;
 use std::io::stderr;
 use std::io::Write;
 use std::sync::Arc;
+use std::cell::RefCell;
 
 use super::error_alert;
 
@@ -13,7 +14,6 @@ use super::error_alert;
 pub struct HotkeysSettings
 {
     registering: i32,
-    alert: Option<&'static str>,
     registered_hotkeys: Arc<RegisteredHotkeys>
 }
 
@@ -21,20 +21,20 @@ impl HotkeysSettings
 {
     pub fn new(registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
     {
-        Self {registering:-1, alert: None, registered_hotkeys}
+        Self {registering:-1, registered_hotkeys}
     }
 
-    pub fn update(&mut self, ui: &mut Ui, ctx: &Context) -> SettingsEvent
+    pub fn update(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui, ctx: &Context) -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
 
-        error_alert::show_error_alert(ctx, &mut self.alert);
+        error_alert::show_error_alert(ctx, &mut alert.borrow_mut());
 
 
         //controllo se è in corso la registrazione di una hotkey
         if self.registering >= 0
         {
-            if let Some(new_hk) = self.registration_phase(ui)
+            if let Some(new_hk) = self.registration_phase(alert.clone(), ui)
             {
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
                 if let Err(e) = self.registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize))
@@ -54,7 +54,7 @@ impl HotkeysSettings
                     label.push_str(": ");
                     let value = match self.registered_hotkeys.get_string(HotkeyName::from(i)) {Some(str) => str.clone(), None => String::from("")};
 
-                    self.row_gui(ui, label, value, i);
+                    self.row_gui(alert.clone(), ui, label, value, i);
                 }
 
                 ui.separator();
@@ -63,7 +63,7 @@ impl HotkeysSettings
                         if ui.button("Save").clicked() {
                             if self.registering >= 0
                             {
-                                self.alert = Some("Invalid operation. Please press done and then proceed");
+                                alert.borrow_mut().replace("Invalid operation. Please press done and then proceed");
                             }else {
                                 ret = SettingsEvent::Saved;
                             }
@@ -88,7 +88,7 @@ impl HotkeysSettings
         ret
     }
 
-    fn row_gui(&mut self, ui: &mut Ui, label: String, value: String, row_n: usize)
+    fn row_gui(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui, label: String, value: String, row_n: usize)
     {
         ui.add_enabled_ui(self.registering < 0 || self.registering as usize == row_n, |ui|
         {
@@ -104,7 +104,7 @@ impl HotkeysSettings
                         {
                             if let Err(e) = self.registered_hotkeys.unregister(HotkeyName::from(row_n))
                             {
-                                self.alert.replace("Error: unable to complete the operation");
+                                alert.borrow_mut().replace("Error: unable to complete the operation");
                                 write!(stderr(), "Err = {}", e);
                             }
                         } 
@@ -123,7 +123,7 @@ impl HotkeysSettings
         
     }
 
-    fn registration_phase(&mut self, ui: &mut Ui) -> Option<KeyboardShortcut>
+    fn registration_phase(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui) -> Option<KeyboardShortcut>
     {
         let mut ret = None;
         let events = ui.input(|i| {i.events.clone()});
@@ -138,7 +138,7 @@ impl HotkeysSettings
                       {
                         ret = Some(KeyboardShortcut::new(modifiers.clone(), key.clone()));
                       }else {
-                          self.alert.replace("Invalid shortcut. Please press any modifier before the char. Press each button only once.");
+                          alert.borrow_mut().replace("Invalid shortcut. Please press any modifier before the char. Press each button only once.");
                       }
                 }
                 _ => ()

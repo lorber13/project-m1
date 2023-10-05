@@ -6,6 +6,7 @@ extern crate image;
 use super::super::itc::{Delay,ScreenshotDim};
 use eframe::egui::ColorImage;
 use std::sync::Arc;
+use std::cell::RefCell;
 
 
 pub struct CaptureMode {
@@ -20,7 +21,7 @@ impl CaptureMode{
         }
     }
 
-    pub fn update(&mut self, ui: &mut egui::Ui, screens_mgr: Arc<ScreensManager>, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, f64)> 
+    pub fn update(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut egui::Ui, screens_mgr: Arc<ScreensManager>, ctx: &egui::Context, _frame: &mut eframe::Frame) -> Option<(ScreenshotDim, f64)> 
     {
         let mut ret = None;
 

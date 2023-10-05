@@ -3,7 +3,7 @@
 use eframe::egui;
 use crate::itc::SettingsEvent;
 use chrono::Local;
-
+use std::cell::RefCell;
 use super::{file_dialog, error_alert};
 
 
@@ -69,7 +69,7 @@ impl SaveSettings
                 alert: None}
     }
 
-    pub fn update(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> SettingsEvent
+    pub fn update(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut egui::Ui, ctx: &egui::Context) -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
 
