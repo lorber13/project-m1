@@ -1,9 +1,9 @@
 use crate::image_coding::ImageFormat;
-use eframe::egui::ComboBox;
 use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
     Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui,
 };
+use eframe::egui::{ComboBox, CursorIcon};
 use eframe::emath::Rot2;
 use eframe::epaint::{CircleShape, RectShape};
 use image::RgbaImage;
@@ -33,12 +33,37 @@ enum Tool {
         start_drag: Option<Pos2>,
     },
     Cut {
-        rect: Option<Rect>,
+        state_of_current_rectangle: CuttingRectangle,
     },
     /* todo:
        text, very difficult
        rubber, not mandatory but recommended
     */
+}
+
+#[derive(PartialEq)]
+enum CuttingRectangle {
+    NonExistent,
+    Creation {
+        start_drag: Pos2,
+    },
+    Existent {
+        rect: Rect,
+        resizing: ResizeDirection,
+    },
+}
+
+#[derive(PartialEq)]
+enum ResizeDirection {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    NoResize,
 }
 
 pub struct EditImage {
@@ -169,43 +194,44 @@ impl EditImage {
                             ));
                         } else if response.dragged() {
                             line.push(response.hover_pos().unwrap()); // todo: manage hover outside the response
-                            painter.add(Shape::line(line.clone(), self.stroke)); // todo: check if clone is necessary
+                            painter.add(Shape::line(line.clone(), self.stroke));
+                        // todo: check if clone is necessary
                         } else if response.drag_released() {
                             // no need to push current hover pos, since this frame drag is released
                             painter.add(Shape::line(line.clone(), self.stroke)); // todo: check if necessary clone
                             self.annotations.push(Shape::line(
-                                line
-                                    .clone()
+                                line.clone()
                                     .iter_mut()
                                     .map(|point| {
-                                        scaled_point(painter.clip_rect().left_top(), self.scale_ratio, *point)
+                                        scaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            *point,
+                                        )
                                     })
                                     .collect(),
-                                Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                Stroke::new(
+                                    self.stroke.width / self.scale_ratio,
+                                    self.stroke.color,
+                                ),
                             ));
                             *line = Vec::new();
                         }
                     }
-                    Tool::Circle { ref mut start_drag } => {
+                    Tool::Circle { start_drag } => {
                         if response.drag_started() {
                             *start_drag = response.hover_pos();
                         } else if response.dragged() {
                             if self.fill_shape {
                                 painter.circle_filled(
                                     start_drag.unwrap(),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap()),
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap()),
                                     self.stroke.color,
                                 );
                             } else {
                                 painter.circle_stroke(
                                     start_drag.unwrap(),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap()),
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap()),
                                     self.stroke,
                                 );
                             }
@@ -213,10 +239,7 @@ impl EditImage {
                             if self.fill_shape {
                                 painter.circle_filled(
                                     start_drag.unwrap(),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap()),
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap()),
                                     self.stroke.color,
                                 );
                                 self.annotations.push(Shape::Circle(CircleShape::filled(
@@ -225,20 +248,14 @@ impl EditImage {
                                         self.scale_ratio,
                                         start_drag.unwrap(),
                                     ),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap())
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap())
                                         / self.scale_ratio, // todo: manage hover outside the response
                                     self.stroke.color,
                                 )));
                             } else {
                                 painter.circle_stroke(
                                     start_drag.unwrap(),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap()),
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap()),
                                     self.stroke,
                                 );
                                 self.annotations.push(Shape::Circle(CircleShape::stroke(
@@ -247,29 +264,35 @@ impl EditImage {
                                         self.scale_ratio,
                                         start_drag.unwrap(),
                                     ),
-                                    response
-                                        .hover_pos()
-                                        .unwrap()
-                                        .distance(start_drag.unwrap())
+                                    response.hover_pos().unwrap().distance(start_drag.unwrap())
                                         / self.scale_ratio, // todo: manage hover outside the response
-                                    Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                    Stroke::new(
+                                        self.stroke.width / self.scale_ratio,
+                                        self.stroke.color,
+                                    ),
                                 )));
                             }
                         }
                     }
-                    Tool::Rect { ref mut start_drag } => {
+                    Tool::Rect { start_drag } => {
                         if response.drag_started() {
                             *start_drag = response.hover_pos();
                         } else if response.dragged() {
                             if self.fill_shape {
                                 painter.rect_filled(
-                                    Rect::from_two_pos(start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                                    Rect::from_two_pos(
+                                        start_drag.unwrap(),
+                                        response.hover_pos().unwrap(),
+                                    ), // todo: manage hover outside the response
                                     Rounding::none(),
                                     self.stroke.color,
                                 );
                             } else {
                                 painter.rect_stroke(
-                                    Rect::from_two_pos(start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                                    Rect::from_two_pos(
+                                        start_drag.unwrap(),
+                                        response.hover_pos().unwrap(),
+                                    ), // todo: manage hover outside the response
                                     Rounding::none(),
                                     self.stroke,
                                 );
@@ -277,30 +300,49 @@ impl EditImage {
                         } else if response.drag_released() {
                             if self.fill_shape {
                                 painter.rect_filled(
-                                    Rect::from_two_pos(start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                                    Rect::from_two_pos(
+                                        start_drag.unwrap(),
+                                        response.hover_pos().unwrap(),
+                                    ), // todo: manage hover outside the response
                                     Rounding::none(),
                                     self.stroke.color,
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::filled(
-                                    scaled_rect(self.scale_ratio, start_drag.unwrap(), &painter, &response),
+                                    scaled_rect(
+                                        self.scale_ratio,
+                                        start_drag.unwrap(),
+                                        &painter,
+                                        &response,
+                                    ),
                                     Rounding::none(),
                                     self.stroke.color,
                                 )));
                             } else {
                                 painter.rect_stroke(
-                                    Rect::from_two_pos(start_drag.unwrap(), response.hover_pos().unwrap()), // todo: manage hover outside the response
+                                    Rect::from_two_pos(
+                                        start_drag.unwrap(),
+                                        response.hover_pos().unwrap(),
+                                    ), // todo: manage hover outside the response
                                     Rounding::none(),
                                     self.stroke,
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::stroke(
-                                    scaled_rect(self.scale_ratio, start_drag.unwrap(), &painter, &response),
+                                    scaled_rect(
+                                        self.scale_ratio,
+                                        start_drag.unwrap(),
+                                        &painter,
+                                        &response,
+                                    ),
                                     Rounding::none(),
-                                    Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                    Stroke::new(
+                                        self.stroke.width / self.scale_ratio,
+                                        self.stroke.color,
+                                    ),
                                 )))
                             }
                         }
                     }
-                    Tool::Arrow { ref mut start_drag } => {
+                    Tool::Arrow { start_drag } => {
                         if response.drag_started() {
                             *start_drag = response.hover_pos();
                         } else if response.dragged() {
@@ -323,51 +365,325 @@ impl EditImage {
                             let dir = vec.normalized();
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(painter.clip_rect().left_top(), self.scale_ratio, origin),
-                                    scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                                    scaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        origin,
+                                    ),
+                                    scaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        tip,
+                                    ),
                                 ],
-                                stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                stroke: Stroke::new(
+                                    self.stroke.width / self.scale_ratio,
+                                    self.stroke.color,
+                                ),
                             });
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                                    scaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        tip,
+                                    ),
                                     scaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip - tip_length * (rot * dir),
                                     ),
                                 ],
-                                stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                stroke: Stroke::new(
+                                    self.stroke.width / self.scale_ratio,
+                                    self.stroke.color,
+                                ),
                             });
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(painter.clip_rect().left_top(), self.scale_ratio, tip),
+                                    scaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        tip,
+                                    ),
                                     scaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip - tip_length * (rot.inverse() * dir),
                                     ),
                                 ],
-                                stroke: Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
+                                stroke: Stroke::new(
+                                    self.stroke.width / self.scale_ratio,
+                                    self.stroke.color,
+                                ),
                             });
                         }
                     }
-                    Tool::Cut { .. } => {
-                        todo!()
-                    }
+                    Tool::Cut {
+                        ref mut state_of_current_rectangle,
+                    } => match state_of_current_rectangle {
+                        CuttingRectangle::NonExistent => {
+                            painter.rect_filled(
+                                painter.clip_rect(),
+                                Rounding::none(),
+                                Color32::from_black_alpha(200),
+                            );
+                            ctx.set_cursor_icon(CursorIcon::Crosshair);
+                            if response.drag_started() {
+                                *state_of_current_rectangle = CuttingRectangle::Creation {
+                                    start_drag: response.hover_pos().unwrap(),
+                                }
+                            }
+                        }
+                        CuttingRectangle::Creation { start_drag } => {
+                            let rectangle_drawn_until_now =
+                                Rect::from_two_pos(*start_drag, response.hover_pos().unwrap());
+                            if response.dragged() {
+                                ctx.set_cursor_icon(CursorIcon::Crosshair);
+                                Self::obscure_screen(&painter, rectangle_drawn_until_now);
+                            } else if response.drag_released() {
+                                Self::obscure_screen(&painter, rectangle_drawn_until_now);
+                                *state_of_current_rectangle = CuttingRectangle::Existent {
+                                    rect: Rect::from_two_pos(
+                                        *start_drag,
+                                        response.hover_pos().unwrap(),
+                                    ),
+                                    resizing: ResizeDirection::NoResize,
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                        CuttingRectangle::Existent { rect, resizing } => {
+                            Self::obscure_screen(&painter, *rect);
+                            match resizing {
+                                ResizeDirection::Top => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                        rect.set_top(response.hover_pos().unwrap().y);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::Bottom => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                        rect.set_bottom(response.hover_pos().unwrap().y);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::Left => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                        rect.set_left(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::Right => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                        rect.set_right(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::TopLeft => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
+                                        rect.set_top(response.hover_pos().unwrap().y);
+                                        rect.set_left(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::TopRight => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
+                                        rect.set_top(response.hover_pos().unwrap().y);
+                                        rect.set_right(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::BottomLeft => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
+                                        rect.set_bottom(response.hover_pos().unwrap().y);
+                                        rect.set_left(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::BottomRight => {
+                                    if response.dragged() {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
+                                        rect.set_bottom(response.hover_pos().unwrap().y);
+                                        rect.set_right(response.hover_pos().unwrap().x);
+                                    } else if response.drag_released() {
+                                        *resizing = ResizeDirection::NoResize;
+                                    }
+                                }
+                                ResizeDirection::NoResize => {
+                                    if let Some(pos) = response.hover_pos() {
+                                        // top-left corner of the rectangle
+                                        if rect.left_top().round() == pos.round() {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::TopLeft;
+                                            }
+                                        }
+                                        // top-right corner of the rectangle
+                                        else if rect.right_top().round() == pos.round() {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::TopRight;
+                                            }
+                                        }
+                                        // bottom-left corner of the rectangle
+                                        else if rect.left_bottom().round() == pos.round() {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::BottomLeft;
+                                            }
+                                        }
+                                        // bottom-right corner of the rectangle
+                                        else if rect.right_bottom().round() == pos.round() {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::BottomRight;
+                                            }
+                                        }
+                                        // right segment of the rectangle
+                                        else if rect.right().round() == pos.x.round()
+                                            && pos.y >= rect.top()
+                                            && pos.y <= rect.bottom()
+                                        {
+                                            // todo: manage equivalence between f32. Is round() sufficient?
+                                            ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::Right;
+                                            }
+                                        }
+                                        // left segment of the rectangle
+                                        else if rect.left().round() == pos.x.round()
+                                            && pos.y >= rect.top()
+                                            && pos.y <= rect.bottom()
+                                        {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::Left;
+                                            }
+                                        }
+                                        // top segment of the rectangle
+                                        else if rect.top().round() == pos.y.round()
+                                            && pos.x >= rect.left()
+                                            && pos.x <= rect.right()
+                                        {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::Top;
+                                            }
+                                        }
+                                        // bottom segment of the rectangle
+                                        else if rect.bottom().round() == pos.y.round()
+                                            && pos.x >= rect.left()
+                                            && pos.x <= rect.right()
+                                        {
+                                            ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                            if response.drag_started() {
+                                                *resizing = ResizeDirection::Bottom;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                 }
             });
         });
         ret
     }
 
+    fn obscure_screen(painter: &Painter, except_rectangle: Rect) {
+        painter.rect_stroke(
+            except_rectangle,
+            Rounding::none(),
+            Stroke::new(3.0, Color32::RED),
+        );
+        painter.rect_filled(
+            {
+                let mut rect = painter.clip_rect();
+                rect.set_right(except_rectangle.left());
+                rect
+            },
+            Rounding::none(),
+            Color32::from_black_alpha(200),
+        );
+        painter.rect_filled(
+            {
+                let mut rect = painter.clip_rect();
+                rect.set_bottom(except_rectangle.top());
+                rect.set_left(except_rectangle.left());
+                rect.set_right(except_rectangle.right());
+                rect
+            },
+            Rounding::none(),
+            Color32::from_black_alpha(200),
+        );
+        painter.rect_filled(
+            {
+                let mut rect = painter.clip_rect();
+                rect.set_left(except_rectangle.right());
+                rect
+            },
+            Rounding::none(),
+            Color32::from_black_alpha(200),
+        );
+        painter.rect_filled(
+            {
+                let mut rect = painter.clip_rect();
+                rect.set_top(except_rectangle.bottom());
+                rect.set_left(except_rectangle.left());
+                rect.set_right(except_rectangle.right());
+                rect
+            },
+            Rounding::none(),
+            Color32::from_black_alpha(200),
+        );
+    }
+
     fn draw_menu_buttons(&mut self, ret: &mut EditImageEvent, ui: &mut Ui) {
         ui.horizontal_top(|ui| {
-            ui.selectable_value(&mut self.current_tool, Tool::Rect { start_drag: None }, "rectangle");
-            ui.selectable_value(&mut self.current_tool, Tool::Circle { start_drag: None }, "circle");
-            ui.selectable_value(&mut self.current_tool, Tool::Pen { line: Vec::new() }, "pen");
-            ui.selectable_value(&mut self.current_tool, Tool::Arrow { start_drag: None }, "arrow");
-            ui.selectable_value(&mut self.current_tool, Tool::Cut { rect: None }, "cut");
+            ui.selectable_value(
+                &mut self.current_tool,
+                Tool::Rect { start_drag: None },
+                "rectangle",
+            );
+            ui.selectable_value(
+                &mut self.current_tool,
+                Tool::Circle { start_drag: None },
+                "circle",
+            );
+            ui.selectable_value(
+                &mut self.current_tool,
+                Tool::Pen { line: Vec::new() },
+                "pen",
+            );
+            ui.selectable_value(
+                &mut self.current_tool,
+                Tool::Arrow { start_drag: None },
+                "arrow",
+            );
+            ui.selectable_value(
+                &mut self.current_tool,
+                Tool::Cut {
+                    state_of_current_rectangle: CuttingRectangle::NonExistent,
+                },
+                "cut",
+            );
             if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
                 ui.selectable_value(&mut self.fill_shape, true, "filled");
                 ui.selectable_value(&mut self.fill_shape, false, "border");
@@ -376,7 +692,9 @@ impl EditImage {
                 (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
                     ui.color_edit_button_srgba(&mut self.stroke.color);
                 }
-                (Tool::Rect { .. } | Tool::Circle { .. }, false) | (Tool::Pen { .. }, _) | (Tool::Arrow { .. }, _) => {
+                (Tool::Rect { .. } | Tool::Circle { .. }, false)
+                | (Tool::Pen { .. }, _)
+                | (Tool::Arrow { .. }, _) => {
                     stroke_ui(ui, &mut self.stroke, "Stroke");
                 }
                 (Tool::Cut { .. }, _) => {}
@@ -394,7 +712,7 @@ impl EditImage {
             if ui.button("Save").clicked() {
                 *ret = EditImageEvent::Saved {
                     image: self.image.clone(), // todo: ugly clone
-                    format: self.format.clone(),
+                    format: self.format,
                 };
             }
             if ui.button("Abort").clicked() {
@@ -412,11 +730,7 @@ fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
 }
 fn scaled_rect(scale_ratio: f32, start_drag: Pos2, painter: &Painter, response: &Response) -> Rect {
     Rect::from_two_pos(
-        scaled_point(
-            painter.clip_rect().left_top(),
-            scale_ratio,
-            start_drag,
-        ),
+        scaled_point(painter.clip_rect().left_top(), scale_ratio, start_drag),
         scaled_point(
             painter.clip_rect().left_top(),
             scale_ratio,
