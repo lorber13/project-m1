@@ -131,41 +131,41 @@ impl EditImage {
             match annotation {
                 Shape::Rect(rect_shape) => {
                     rect_shape.rect.min.x *= self.scale_ratio;
-                    rect_shape.rect.min.x += painter.clip_rect().min.x;
+                    rect_shape.rect.min.x += painter.clip_rect().left_top().x;
                     rect_shape.rect.min.y *= self.scale_ratio;
-                    rect_shape.rect.min.y += painter.clip_rect().min.y;
+                    rect_shape.rect.min.y += painter.clip_rect().left_top().y;
                     rect_shape.rect.max.x *= self.scale_ratio;
-                    rect_shape.rect.max.x += painter.clip_rect().min.x;
+                    rect_shape.rect.max.x += painter.clip_rect().left_top().x;
                     rect_shape.rect.max.y *= self.scale_ratio;
-                    rect_shape.rect.max.y += painter.clip_rect().min.y;
+                    rect_shape.rect.max.y += painter.clip_rect().left_top().y;
                     rect_shape.stroke.width *= self.scale_ratio;
                 }
                 Shape::Circle(circle_shape) => {
                     circle_shape.center.x *= self.scale_ratio;
-                    circle_shape.center.x += painter.clip_rect().min.x;
+                    circle_shape.center.x += painter.clip_rect().left_top().x;
                     circle_shape.center.y *= self.scale_ratio;
-                    circle_shape.center.y += painter.clip_rect().min.y;
+                    circle_shape.center.y += painter.clip_rect().left_top().y;
                     circle_shape.radius *= self.scale_ratio;
                     circle_shape.stroke.width *= self.scale_ratio;
                 }
                 Shape::LineSegment { points, stroke } => {
                     points[0].x *= self.scale_ratio;
-                    points[0].x += painter.clip_rect().min.x;
+                    points[0].x += painter.clip_rect().left_top().x;
                     points[0].y *= self.scale_ratio;
-                    points[0].y += painter.clip_rect().min.y;
+                    points[0].y += painter.clip_rect().left_top().y;
                     points[1].x *= self.scale_ratio;
-                    points[1].x += painter.clip_rect().min.x;
+                    points[1].x += painter.clip_rect().left_top().x;
                     points[1].y *= self.scale_ratio;
-                    points[1].y += painter.clip_rect().min.y;
+                    points[1].y += painter.clip_rect().left_top().y;
                     stroke.width *= self.scale_ratio;
                 }
                 Shape::Path(path_shape) => {
                     path_shape.stroke.width *= self.scale_ratio;
                     for point in path_shape.points.iter_mut() {
                         point.x *= self.scale_ratio;
-                        point.x += painter.clip_rect().min.x;
+                        point.x += painter.clip_rect().left_top().x;
                         point.y *= self.scale_ratio;
-                        point.y += painter.clip_rect().min.y;
+                        point.y += painter.clip_rect().left_top().y;
                     }
                 }
                 _ => unreachable!(),
@@ -309,10 +309,12 @@ impl EditImage {
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::filled(
                                     unscaled_rect(
+                                        painter.clip_rect().left_top(),
                                         self.scale_ratio,
-                                        start_drag.unwrap(),
-                                        &painter,
-                                        &response,
+                                        Rect::from_two_pos(
+                                            start_drag.unwrap(),
+                                            response.hover_pos().unwrap(),
+                                        ), // todo: manage hover outside the response
                                     ),
                                     Rounding::none(),
                                     self.stroke.color,
@@ -328,10 +330,12 @@ impl EditImage {
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::stroke(
                                     unscaled_rect(
+                                        painter.clip_rect().left_top(),
                                         self.scale_ratio,
-                                        start_drag.unwrap(),
-                                        &painter,
-                                        &response,
+                                        Rect::from_two_pos(
+                                            start_drag.unwrap(),
+                                            response.hover_pos().unwrap(),
+                                        ), // todo: manage hover outside the response
                                     ),
                                     Rounding::none(),
                                     Stroke::new(
@@ -446,7 +450,11 @@ impl EditImage {
                                 if rectangle_drawn_until_now.area() > 0.0 {
                                     // todo: this piece of code is a workaround. It is not meant to be in the final release.
                                     *state_of_current_rectangle = CuttingRectangle::Existent {
-                                        rect: rectangle_drawn_until_now,
+                                        rect: unscaled_rect(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            rectangle_drawn_until_now,
+                                        ),
                                         resizing: ResizeDirection::NoResize,
                                     }
                                 } else {
@@ -458,12 +466,26 @@ impl EditImage {
                             }
                         }
                         CuttingRectangle::Existent { rect, resizing } => {
-                            obscure_screen(&painter, *rect);
+                            obscure_screen(
+                                &painter,
+                                scaled_rect(
+                                    painter.clip_rect().left_top(),
+                                    self.scale_ratio,
+                                    *rect,
+                                ),
+                            );
                             match resizing {
                                 ResizeDirection::Top => {
                                     if response.dragged() {
                                         ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                        rect.set_top(response.hover_pos().unwrap().y);
+                                        rect.set_top(
+                                            unscaled_point(
+                                                painter.clip_rect().left_top(),
+                                                self.scale_ratio,
+                                                response.hover_pos().unwrap_or_else(|| todo!()),
+                                            )
+                                            .y,
+                                        );
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
@@ -471,7 +493,14 @@ impl EditImage {
                                 ResizeDirection::Bottom => {
                                     if response.dragged() {
                                         ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                        rect.set_bottom(response.hover_pos().unwrap().y);
+                                        rect.set_bottom(
+                                            unscaled_point(
+                                                painter.clip_rect().left_top(),
+                                                self.scale_ratio,
+                                                response.hover_pos().unwrap_or_else(|| todo!()),
+                                            )
+                                            .y,
+                                        );
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
@@ -479,7 +508,14 @@ impl EditImage {
                                 ResizeDirection::Left => {
                                     if response.dragged() {
                                         ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                        rect.set_left(response.hover_pos().unwrap().x);
+                                        rect.set_left(
+                                            unscaled_point(
+                                                painter.clip_rect().left_top(),
+                                                self.scale_ratio,
+                                                response.hover_pos().unwrap_or_else(|| todo!()),
+                                            )
+                                            .x,
+                                        );
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
@@ -487,49 +523,81 @@ impl EditImage {
                                 ResizeDirection::Right => {
                                     if response.dragged() {
                                         ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                        rect.set_right(response.hover_pos().unwrap().x);
+                                        rect.set_right(
+                                            unscaled_point(
+                                                painter.clip_rect().left_top(),
+                                                self.scale_ratio,
+                                                response.hover_pos().unwrap_or_else(|| todo!()),
+                                            )
+                                            .x,
+                                        );
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
                                 }
                                 ResizeDirection::TopLeft => {
                                     if response.dragged() {
+                                        let point = unscaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            response.hover_pos().unwrap_or_else(|| todo!()),
+                                        );
                                         ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
-                                        rect.set_top(response.hover_pos().unwrap().y);
-                                        rect.set_left(response.hover_pos().unwrap().x);
+                                        rect.set_top(point.y);
+                                        rect.set_left(point.x);
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
                                 }
                                 ResizeDirection::TopRight => {
                                     if response.dragged() {
+                                        let point = unscaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            response.hover_pos().unwrap_or_else(|| todo!()),
+                                        );
                                         ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
-                                        rect.set_top(response.hover_pos().unwrap().y);
-                                        rect.set_right(response.hover_pos().unwrap().x);
+                                        rect.set_top(point.y);
+                                        rect.set_right(point.x);
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
                                 }
                                 ResizeDirection::BottomLeft => {
                                     if response.dragged() {
+                                        let point = unscaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            response.hover_pos().unwrap_or_else(|| todo!()),
+                                        );
                                         ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
-                                        rect.set_bottom(response.hover_pos().unwrap().y);
-                                        rect.set_left(response.hover_pos().unwrap().x);
+                                        rect.set_bottom(point.y);
+                                        rect.set_left(point.x);
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
                                 }
                                 ResizeDirection::BottomRight => {
+                                    let point = unscaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        response.hover_pos().unwrap_or_else(|| todo!()),
+                                    );
                                     if response.dragged() {
                                         ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
-                                        rect.set_bottom(response.hover_pos().unwrap().y);
-                                        rect.set_right(response.hover_pos().unwrap().x);
+                                        rect.set_bottom(point.y);
+                                        rect.set_right(point.x);
                                     } else if response.drag_released() {
                                         *resizing = ResizeDirection::NoResize;
                                     }
                                 }
                                 ResizeDirection::NoResize => {
-                                    if let Some(pos) = response.hover_pos() {
+                                    if let Some(mut pos) = response.hover_pos() {
+                                        pos = unscaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            pos,
+                                        );
                                         // top-left corner of the rectangle
                                         if rect.left_top().round() == pos.round() {
                                             ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
@@ -724,20 +792,24 @@ fn unscaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
         (point.y - top_left.y) / scale_ratio,
     )
 }
-fn unscaled_rect(
-    scale_ratio: f32,
-    start_drag: Pos2,
-    painter: &Painter,
-    response: &Response,
-) -> Rect {
+fn unscaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     Rect::from_two_pos(
-        unscaled_point(painter.clip_rect().left_top(), scale_ratio, start_drag),
-        unscaled_point(
-            painter.clip_rect().left_top(),
-            scale_ratio,
-            response.hover_pos().unwrap(),
-        ),
-    ) // todo: manage hover outside the response
+        unscaled_point(top_left, scale_ratio, rect.left_top()),
+        unscaled_point(top_left, scale_ratio, rect.right_bottom()),
+    )
+}
+
+fn scaled_rect(top_left: Pos2, scale_ratio: f32, mut rect: Rect) -> Rect {
+    rect.min = scaled_point(top_left, scale_ratio, rect.min);
+    rect.max = scaled_point(top_left, scale_ratio, rect.max);
+    rect
+}
+
+fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
+    pos2(
+        point.x * scale_ratio + top_left.x,
+        point.y * scale_ratio + top_left.y,
+    )
 }
 
 pub fn obscure_screen(painter: &Painter, except_rectangle: Rect) {
