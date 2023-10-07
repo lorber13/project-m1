@@ -18,7 +18,7 @@ pub enum EditImageEvent {
     Nil,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum Tool {
     Pen {
         line: Vec<Pos2>,
@@ -41,7 +41,7 @@ enum Tool {
     */
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum CuttingRectangle {
     NonExistent,
     Creation {
@@ -53,7 +53,7 @@ enum CuttingRectangle {
     },
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum ResizeDirection {
     Top,
     Bottom,
@@ -203,7 +203,7 @@ impl EditImage {
                                 line.clone()
                                     .iter_mut()
                                     .map(|point| {
-                                        scaled_point(
+                                        unscaled_point(
                                             painter.clip_rect().left_top(),
                                             self.scale_ratio,
                                             *point,
@@ -243,7 +243,7 @@ impl EditImage {
                                     self.stroke.color,
                                 );
                                 self.annotations.push(Shape::Circle(CircleShape::filled(
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         start_drag.unwrap(),
@@ -259,7 +259,7 @@ impl EditImage {
                                     self.stroke,
                                 );
                                 self.annotations.push(Shape::Circle(CircleShape::stroke(
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         start_drag.unwrap(),
@@ -308,7 +308,7 @@ impl EditImage {
                                     self.stroke.color,
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::filled(
-                                    scaled_rect(
+                                    unscaled_rect(
                                         self.scale_ratio,
                                         start_drag.unwrap(),
                                         &painter,
@@ -327,7 +327,7 @@ impl EditImage {
                                     self.stroke,
                                 );
                                 self.annotations.push(Shape::Rect(RectShape::stroke(
-                                    scaled_rect(
+                                    unscaled_rect(
                                         self.scale_ratio,
                                         start_drag.unwrap(),
                                         &painter,
@@ -365,12 +365,12 @@ impl EditImage {
                             let dir = vec.normalized();
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         origin,
                                     ),
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip,
@@ -383,12 +383,12 @@ impl EditImage {
                             });
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip,
                                     ),
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip - tip_length * (rot * dir),
@@ -401,12 +401,12 @@ impl EditImage {
                             });
                             self.annotations.push(Shape::LineSegment {
                                 points: [
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip,
                                     ),
-                                    scaled_point(
+                                    unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         tip - tip_length * (rot.inverse() * dir),
@@ -422,6 +422,7 @@ impl EditImage {
                     Tool::Cut {
                         ref mut state_of_current_rectangle,
                     } => match state_of_current_rectangle {
+                        // todo: why response.clicked() always returns false? should I embed states in the input? I cannot
                         CuttingRectangle::NonExistent => {
                             painter.rect_filled(
                                 painter.clip_rect(),
@@ -440,22 +441,24 @@ impl EditImage {
                                 Rect::from_two_pos(*start_drag, response.hover_pos().unwrap());
                             if response.dragged() {
                                 ctx.set_cursor_icon(CursorIcon::Crosshair);
-                                Self::obscure_screen(&painter, rectangle_drawn_until_now);
+                                obscure_screen(&painter, rectangle_drawn_until_now);
                             } else if response.drag_released() {
-                                Self::obscure_screen(&painter, rectangle_drawn_until_now);
-                                *state_of_current_rectangle = CuttingRectangle::Existent {
-                                    rect: Rect::from_two_pos(
-                                        *start_drag,
-                                        response.hover_pos().unwrap(),
-                                    ),
-                                    resizing: ResizeDirection::NoResize,
+                                if rectangle_drawn_until_now.area() > 0.0 {
+                                    // todo: this piece of code is a workaround. It is not meant to be in the final release.
+                                    *state_of_current_rectangle = CuttingRectangle::Existent {
+                                        rect: rectangle_drawn_until_now,
+                                        resizing: ResizeDirection::NoResize,
+                                    }
+                                } else {
+                                    *state_of_current_rectangle = CuttingRectangle::NonExistent;
                                 }
+                                obscure_screen(&painter, rectangle_drawn_until_now);
                             } else {
                                 unreachable!()
                             }
                         }
                         CuttingRectangle::Existent { rect, resizing } => {
-                            Self::obscure_screen(&painter, *rect);
+                            obscure_screen(&painter, *rect);
                             match resizing {
                                 ResizeDirection::Top => {
                                     if response.dragged() {
@@ -607,83 +610,76 @@ impl EditImage {
         ret
     }
 
-    fn obscure_screen(painter: &Painter, except_rectangle: Rect) {
-        painter.rect_stroke(
-            except_rectangle,
-            Rounding::none(),
-            Stroke::new(3.0, Color32::RED),
-        );
-        painter.rect_filled(
-            {
-                let mut rect = painter.clip_rect();
-                rect.set_right(except_rectangle.left());
-                rect
-            },
-            Rounding::none(),
-            Color32::from_black_alpha(200),
-        );
-        painter.rect_filled(
-            {
-                let mut rect = painter.clip_rect();
-                rect.set_bottom(except_rectangle.top());
-                rect.set_left(except_rectangle.left());
-                rect.set_right(except_rectangle.right());
-                rect
-            },
-            Rounding::none(),
-            Color32::from_black_alpha(200),
-        );
-        painter.rect_filled(
-            {
-                let mut rect = painter.clip_rect();
-                rect.set_left(except_rectangle.right());
-                rect
-            },
-            Rounding::none(),
-            Color32::from_black_alpha(200),
-        );
-        painter.rect_filled(
-            {
-                let mut rect = painter.clip_rect();
-                rect.set_top(except_rectangle.bottom());
-                rect.set_left(except_rectangle.left());
-                rect.set_right(except_rectangle.right());
-                rect
-            },
-            Rounding::none(),
-            Color32::from_black_alpha(200),
-        );
-    }
-
     fn draw_menu_buttons(&mut self, ret: &mut EditImageEvent, ui: &mut Ui) {
         ui.horizontal_top(|ui| {
-            ui.selectable_value(
-                &mut self.current_tool,
-                Tool::Rect { start_drag: None },
-                "rectangle",
-            );
-            ui.selectable_value(
-                &mut self.current_tool,
-                Tool::Circle { start_drag: None },
-                "circle",
-            );
-            ui.selectable_value(
-                &mut self.current_tool,
-                Tool::Pen { line: Vec::new() },
-                "pen",
-            );
-            ui.selectable_value(
-                &mut self.current_tool,
-                Tool::Arrow { start_drag: None },
-                "arrow",
-            );
-            ui.selectable_value(
-                &mut self.current_tool,
-                Tool::Cut {
+            // todo: when the button is pressed, the enum is initialized, but the button does not keep being selected when the internal state of the enum changes
+            if ui
+                .selectable_label(
+                    if let Tool::Rect { .. } = self.current_tool {
+                        true
+                    } else {
+                        false
+                    },
+                    "rectangle",
+                )
+                .clicked()
+            {
+                self.current_tool = Tool::Rect { start_drag: None };
+            }
+            if ui
+                .selectable_label(
+                    if let Tool::Circle { .. } = self.current_tool {
+                        true
+                    } else {
+                        false
+                    },
+                    "circle",
+                )
+                .clicked()
+            {
+                self.current_tool = Tool::Circle { start_drag: None };
+            }
+            if ui
+                .selectable_label(
+                    if let Tool::Pen { .. } = self.current_tool {
+                        true
+                    } else {
+                        false
+                    },
+                    "pen",
+                )
+                .clicked()
+            {
+                self.current_tool = Tool::Pen { line: Vec::new() };
+            }
+            if ui
+                .selectable_label(
+                    if let Tool::Arrow { .. } = self.current_tool {
+                        true
+                    } else {
+                        false
+                    },
+                    "arrow",
+                )
+                .clicked()
+            {
+                self.current_tool = Tool::Arrow { start_drag: None };
+            }
+            if ui
+                .selectable_label(
+                    if let Tool::Cut { .. } = self.current_tool {
+                        true
+                    } else {
+                        false
+                    },
+                    "cut",
+                )
+                .clicked()
+            {
+                self.current_tool = Tool::Cut {
                     state_of_current_rectangle: CuttingRectangle::NonExistent,
-                },
-                "cut",
-            );
+                };
+            }
             if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
                 ui.selectable_value(&mut self.fill_shape, true, "filled");
                 ui.selectable_value(&mut self.fill_shape, false, "border");
@@ -722,19 +718,73 @@ impl EditImage {
     }
 }
 
-fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
+fn unscaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
     pos2(
         (point.x - top_left.x) / scale_ratio,
         (point.y - top_left.y) / scale_ratio,
     )
 }
-fn scaled_rect(scale_ratio: f32, start_drag: Pos2, painter: &Painter, response: &Response) -> Rect {
+fn unscaled_rect(
+    scale_ratio: f32,
+    start_drag: Pos2,
+    painter: &Painter,
+    response: &Response,
+) -> Rect {
     Rect::from_two_pos(
-        scaled_point(painter.clip_rect().left_top(), scale_ratio, start_drag),
-        scaled_point(
+        unscaled_point(painter.clip_rect().left_top(), scale_ratio, start_drag),
+        unscaled_point(
             painter.clip_rect().left_top(),
             scale_ratio,
             response.hover_pos().unwrap(),
         ),
     ) // todo: manage hover outside the response
+}
+
+pub fn obscure_screen(painter: &Painter, except_rectangle: Rect) {
+    // todo: there are two white vertical lines to be removed
+    painter.rect_filled(
+        {
+            let mut rect = painter.clip_rect();
+            rect.set_right(except_rectangle.left());
+            rect
+        },
+        Rounding::none(),
+        Color32::from_black_alpha(200),
+    );
+    painter.rect_filled(
+        {
+            let mut rect = painter.clip_rect();
+            rect.set_bottom(except_rectangle.top());
+            rect.set_left(except_rectangle.left());
+            rect.set_right(except_rectangle.right());
+            rect
+        },
+        Rounding::none(),
+        Color32::from_black_alpha(200),
+    );
+    painter.rect_filled(
+        {
+            let mut rect = painter.clip_rect();
+            rect.set_left(except_rectangle.right());
+            rect
+        },
+        Rounding::none(),
+        Color32::from_black_alpha(200),
+    );
+    painter.rect_filled(
+        {
+            let mut rect = painter.clip_rect();
+            rect.set_top(except_rectangle.bottom());
+            rect.set_left(except_rectangle.left());
+            rect.set_right(except_rectangle.right());
+            rect
+        },
+        Rounding::none(),
+        Color32::from_black_alpha(200),
+    );
+    painter.rect_stroke(
+        except_rectangle,
+        Rounding::none(),
+        Stroke::new(3.0, Color32::RED),
+    );
 }
