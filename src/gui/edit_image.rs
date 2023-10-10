@@ -1,7 +1,7 @@
 use crate::image_coding::ImageFormat;
 use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
-    Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui,
+    Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui, Vec2,
 };
 use eframe::egui::{ComboBox, CursorIcon};
 use eframe::emath::Rot2;
@@ -33,24 +33,13 @@ enum Tool {
         start_drag: Option<Pos2>,
     },
     Cut {
-        state_of_current_rectangle: CuttingRectangle,
+        rect: Rect,
+        resizing: ResizeDirection,
     },
     /* todo:
        text, very difficult
        rubber, not mandatory but recommended
     */
-}
-
-#[derive(PartialEq, Debug)]
-enum CuttingRectangle {
-    NonExistent,
-    Creation {
-        start_drag: Pos2,
-    },
-    Existent {
-        rect: Rect,
-        resizing: ResizeDirection,
-    },
 }
 
 #[derive(PartialEq, Debug)]
@@ -415,255 +404,234 @@ impl EditImage {
                             });
                         }
                     }
-                    Tool::Cut {
-                        ref mut state_of_current_rectangle,
-                    } => match state_of_current_rectangle {
-                        // todo: why response.clicked() always returns false? should I embed states in the input? I cannot
-                        CuttingRectangle::NonExistent => {
-                            painter.rect_filled(
-                                painter.clip_rect(),
-                                Rounding::none(),
-                                Color32::from_black_alpha(200),
-                            );
-                            ctx.set_cursor_icon(CursorIcon::Crosshair);
-                            if response.drag_started() {
-                                *state_of_current_rectangle = CuttingRectangle::Creation {
-                                    start_drag: response.hover_pos().unwrap(),
+                    Tool::Cut { rect, resizing } => {
+                        obscure_screen(
+                            &painter,
+                            scaled_rect(painter.clip_rect().left_top(), self.scale_ratio, *rect),
+                        );
+                        match resizing {
+                            ResizeDirection::Top => {
+                                if response.dragged() {
+                                    ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                    rect.set_top(
+                                        unscaled_point(
+                                            painter.clip_rect().left_top(),
+                                            self.scale_ratio,
+                                            response.hover_pos().unwrap_or_else(|| todo!()),
+                                        )
+                                        .y,
+                                    );
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
                                 }
                             }
-                        }
-                        CuttingRectangle::Creation { start_drag } => {
-                            let rectangle_drawn_until_now =
-                                Rect::from_two_pos(*start_drag, response.hover_pos().unwrap());
-                            if response.dragged() {
-                                ctx.set_cursor_icon(CursorIcon::Crosshair);
-                                obscure_screen(&painter, rectangle_drawn_until_now);
-                            } else if response.drag_released() {
-                                if rectangle_drawn_until_now.area() > 0.0 {
-                                    // todo: this piece of code is a workaround. It is not meant to be in the final release.
-                                    *state_of_current_rectangle = CuttingRectangle::Existent {
-                                        rect: unscaled_rect(
+                            ResizeDirection::Bottom => {
+                                if response.dragged() {
+                                    ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                    rect.set_bottom(
+                                        unscaled_point(
                                             painter.clip_rect().left_top(),
                                             self.scale_ratio,
-                                            rectangle_drawn_until_now,
-                                        ),
-                                        resizing: ResizeDirection::NoResize,
-                                    }
-                                } else {
-                                    *state_of_current_rectangle = CuttingRectangle::NonExistent;
+                                            response.hover_pos().unwrap_or_else(|| todo!()),
+                                        )
+                                        .y,
+                                    );
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
                                 }
-                                obscure_screen(&painter, rectangle_drawn_until_now);
-                            } else {
-                                unreachable!()
                             }
-                        }
-                        CuttingRectangle::Existent { rect, resizing } => {
-                            obscure_screen(
-                                &painter,
-                                scaled_rect(
-                                    painter.clip_rect().left_top(),
-                                    self.scale_ratio,
-                                    *rect,
-                                ),
-                            );
-                            match resizing {
-                                ResizeDirection::Top => {
-                                    if response.dragged() {
-                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                        rect.set_top(
-                                            unscaled_point(
-                                                painter.clip_rect().left_top(),
-                                                self.scale_ratio,
-                                                response.hover_pos().unwrap_or_else(|| todo!()),
-                                            )
-                                            .y,
-                                        );
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
-                                }
-                                ResizeDirection::Bottom => {
-                                    if response.dragged() {
-                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                        rect.set_bottom(
-                                            unscaled_point(
-                                                painter.clip_rect().left_top(),
-                                                self.scale_ratio,
-                                                response.hover_pos().unwrap_or_else(|| todo!()),
-                                            )
-                                            .y,
-                                        );
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
-                                }
-                                ResizeDirection::Left => {
-                                    if response.dragged() {
-                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                        rect.set_left(
-                                            unscaled_point(
-                                                painter.clip_rect().left_top(),
-                                                self.scale_ratio,
-                                                response.hover_pos().unwrap_or_else(|| todo!()),
-                                            )
-                                            .x,
-                                        );
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
-                                }
-                                ResizeDirection::Right => {
-                                    if response.dragged() {
-                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                        rect.set_right(
-                                            unscaled_point(
-                                                painter.clip_rect().left_top(),
-                                                self.scale_ratio,
-                                                response.hover_pos().unwrap_or_else(|| todo!()),
-                                            )
-                                            .x,
-                                        );
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
-                                }
-                                ResizeDirection::TopLeft => {
-                                    if response.dragged() {
-                                        let point = unscaled_point(
+                            ResizeDirection::Left => {
+                                if response.dragged() {
+                                    ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                    rect.set_left(
+                                        unscaled_point(
                                             painter.clip_rect().left_top(),
                                             self.scale_ratio,
                                             response.hover_pos().unwrap_or_else(|| todo!()),
-                                        );
-                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
-                                        rect.set_top(point.y);
-                                        rect.set_left(point.x);
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
+                                        )
+                                        .x,
+                                    );
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
                                 }
-                                ResizeDirection::TopRight => {
-                                    if response.dragged() {
-                                        let point = unscaled_point(
+                            }
+                            ResizeDirection::Right => {
+                                if response.dragged() {
+                                    ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                    rect.set_right(
+                                        unscaled_point(
                                             painter.clip_rect().left_top(),
                                             self.scale_ratio,
                                             response.hover_pos().unwrap_or_else(|| todo!()),
-                                        );
-                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
-                                        rect.set_top(point.y);
-                                        rect.set_right(point.x);
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
+                                        )
+                                        .x,
+                                    );
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
                                 }
-                                ResizeDirection::BottomLeft => {
-                                    if response.dragged() {
-                                        let point = unscaled_point(
-                                            painter.clip_rect().left_top(),
-                                            self.scale_ratio,
-                                            response.hover_pos().unwrap_or_else(|| todo!()),
-                                        );
-                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
-                                        rect.set_bottom(point.y);
-                                        rect.set_left(point.x);
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
-                                }
-                                ResizeDirection::BottomRight => {
+                            }
+                            ResizeDirection::TopLeft => {
+                                if response.dragged() {
                                     let point = unscaled_point(
                                         painter.clip_rect().left_top(),
                                         self.scale_ratio,
                                         response.hover_pos().unwrap_or_else(|| todo!()),
                                     );
-                                    if response.dragged() {
-                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
-                                        rect.set_bottom(point.y);
-                                        rect.set_right(point.x);
-                                    } else if response.drag_released() {
-                                        *resizing = ResizeDirection::NoResize;
-                                    }
+                                    ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
+                                    rect.set_top(point.y);
+                                    rect.set_left(point.x);
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
                                 }
-                                ResizeDirection::NoResize => {
-                                    if let Some(mut pos) = response.hover_pos() {
-                                        pos = unscaled_point(
-                                            painter.clip_rect().left_top(),
-                                            self.scale_ratio,
-                                            pos,
-                                        );
-                                        // top-left corner of the rectangle
-                                        if rect.left_top().round() == pos.round() {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::TopLeft;
-                                            }
+                            }
+                            ResizeDirection::TopRight => {
+                                if response.dragged() {
+                                    let point = unscaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        response.hover_pos().unwrap_or_else(|| todo!()),
+                                    );
+                                    ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
+                                    rect.set_top(point.y);
+                                    rect.set_right(point.x);
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
+                                }
+                            }
+                            ResizeDirection::BottomLeft => {
+                                if response.dragged() {
+                                    let point = unscaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        response.hover_pos().unwrap_or_else(|| todo!()),
+                                    );
+                                    ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
+                                    rect.set_bottom(point.y);
+                                    rect.set_left(point.x);
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
+                                }
+                            }
+                            ResizeDirection::BottomRight => {
+                                if response.dragged() {
+                                    let point = unscaled_point(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        response.hover_pos().unwrap_or_else(|| todo!()),
+                                    );
+                                    ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
+                                    rect.set_bottom(point.y);
+                                    rect.set_right(point.x);
+                                } else if response.drag_released() {
+                                    *resizing = ResizeDirection::NoResize;
+                                }
+                            }
+                            ResizeDirection::NoResize => {
+                                if let Some(mut pos) = response.hover_pos() {
+                                    let rect = scaled_rect(
+                                        painter.clip_rect().left_top(),
+                                        self.scale_ratio,
+                                        *rect,
+                                    );
+                                    let cursor_tolerance = 10.0; // todo: should the tolerance be calculated depending on the display's number of pixels?
+
+                                    // top-left corner of the rectangle
+                                    if Rect::from_center_size(
+                                        rect.left_top(),
+                                        Vec2::splat(cursor_tolerance * 2.0),
+                                    )
+                                    .contains(pos)
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthWest);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::TopLeft;
                                         }
-                                        // top-right corner of the rectangle
-                                        else if rect.right_top().round() == pos.round() {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::TopRight;
-                                            }
+                                    }
+                                    // top-right corner of the rectangle
+                                    else if Rect::from_center_size(
+                                        rect.right_top(),
+                                        Vec2::splat(cursor_tolerance * 2.0),
+                                    )
+                                    .contains(pos)
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeNorthEast);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::TopRight;
                                         }
-                                        // bottom-left corner of the rectangle
-                                        else if rect.left_bottom().round() == pos.round() {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::BottomLeft;
-                                            }
+                                    }
+                                    // bottom-left corner of the rectangle
+                                    else if Rect::from_center_size(
+                                        rect.left_bottom(),
+                                        Vec2::splat(cursor_tolerance * 2.0),
+                                    )
+                                    .contains(pos)
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthWest);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::BottomLeft;
                                         }
-                                        // bottom-right corner of the rectangle
-                                        else if rect.right_bottom().round() == pos.round() {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::BottomRight;
-                                            }
+                                    }
+                                    // bottom-right corner of the rectangle
+                                    else if Rect::from_center_size(
+                                        rect.right_bottom(),
+                                        Vec2::splat(cursor_tolerance * 2.0),
+                                    )
+                                    .contains(pos)
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeSouthEast);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::BottomRight;
                                         }
-                                        // right segment of the rectangle
-                                        else if rect.right().round() == pos.x.round()
-                                            && pos.y >= rect.top()
-                                            && pos.y <= rect.bottom()
-                                        {
-                                            // todo: manage equivalence between f32. Is round() sufficient?
-                                            ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::Right;
-                                            }
+                                    }
+                                    // right segment of the rectangle
+                                    else if pos.x >= rect.right() - cursor_tolerance
+                                        && pos.x <= rect.right() + cursor_tolerance
+                                        && pos.y >= rect.top()
+                                        && pos.y <= rect.bottom()
+                                    {
+                                        // todo: manage equivalence between f32. Is round() sufficient?
+                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::Right;
                                         }
-                                        // left segment of the rectangle
-                                        else if rect.left().round() == pos.x.round()
-                                            && pos.y >= rect.top()
-                                            && pos.y <= rect.bottom()
-                                        {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::Left;
-                                            }
+                                    }
+                                    // left segment of the rectangle
+                                    else if pos.x >= rect.left() - cursor_tolerance
+                                        && pos.x <= rect.left() + cursor_tolerance
+                                        && pos.y >= rect.top()
+                                        && pos.y <= rect.bottom()
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeHorizontal);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::Left;
                                         }
-                                        // top segment of the rectangle
-                                        else if rect.top().round() == pos.y.round()
-                                            && pos.x >= rect.left()
-                                            && pos.x <= rect.right()
-                                        {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::Top;
-                                            }
+                                    }
+                                    // top segment of the rectangle
+                                    else if pos.y >= rect.top() - cursor_tolerance
+                                        && pos.y <= rect.top() + cursor_tolerance
+                                        && pos.x >= rect.left()
+                                        && pos.x <= rect.right()
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::Top;
                                         }
-                                        // bottom segment of the rectangle
-                                        else if rect.bottom().round() == pos.y.round()
-                                            && pos.x >= rect.left()
-                                            && pos.x <= rect.right()
-                                        {
-                                            ctx.set_cursor_icon(CursorIcon::ResizeVertical);
-                                            if response.drag_started() {
-                                                *resizing = ResizeDirection::Bottom;
-                                            }
+                                    }
+                                    // bottom segment of the rectangle
+                                    else if pos.y >= rect.bottom() - cursor_tolerance
+                                        && pos.y <= rect.bottom() + cursor_tolerance
+                                        && pos.x >= rect.left()
+                                        && pos.x <= rect.right()
+                                    {
+                                        ctx.set_cursor_icon(CursorIcon::ResizeVertical);
+                                        if response.drag_started() {
+                                            *resizing = ResizeDirection::Bottom;
                                         }
                                     }
                                 }
                             }
                         }
-                    },
+                    }
                 }
             });
         });
@@ -737,7 +705,8 @@ impl EditImage {
                 .clicked()
             {
                 self.current_tool = Tool::Cut {
-                    state_of_current_rectangle: CuttingRectangle::NonExistent,
+                    rect: Rect::from_min_size(pos2(0.0, 0.0), self.texture_handle.size_vec2()),
+                    resizing: ResizeDirection::NoResize,
                 };
             }
             if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
@@ -759,8 +728,6 @@ impl EditImage {
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
-                    ui.style_mut().wrap = Some(false);
-                    ui.set_min_width(60.0);
                     ui.selectable_value(&mut self.format, ImageFormat::Png, "Png");
                     ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
                     ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
@@ -850,6 +817,6 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect) {
     painter.rect_stroke(
         except_rectangle,
         Rounding::none(),
-        Stroke::new(3.0, Color32::RED),
+        Stroke::new(3.0, Color32::WHITE),
     );
 }
