@@ -130,42 +130,34 @@ impl EditImage {
         for annotation in new_annotations.iter_mut() {
             match annotation {
                 Shape::Rect(rect_shape) => {
-                    rect_shape.rect.min.x *= self.scale_ratio;
-                    rect_shape.rect.min.x += painter.clip_rect().left_top().x;
-                    rect_shape.rect.min.y *= self.scale_ratio;
-                    rect_shape.rect.min.y += painter.clip_rect().left_top().y;
-                    rect_shape.rect.max.x *= self.scale_ratio;
-                    rect_shape.rect.max.x += painter.clip_rect().left_top().x;
-                    rect_shape.rect.max.y *= self.scale_ratio;
-                    rect_shape.rect.max.y += painter.clip_rect().left_top().y;
+                    rect_shape.rect = scaled_rect(
+                        painter.clip_rect().left_top(),
+                        self.scale_ratio,
+                        rect_shape.rect,
+                    );
                     rect_shape.stroke.width *= self.scale_ratio;
                 }
                 Shape::Circle(circle_shape) => {
-                    circle_shape.center.x *= self.scale_ratio;
-                    circle_shape.center.x += painter.clip_rect().left_top().x;
-                    circle_shape.center.y *= self.scale_ratio;
-                    circle_shape.center.y += painter.clip_rect().left_top().y;
+                    circle_shape.center = scaled_point(
+                        painter.clip_rect().left_top(),
+                        self.scale_ratio,
+                        circle_shape.center,
+                    );
                     circle_shape.radius *= self.scale_ratio;
                     circle_shape.stroke.width *= self.scale_ratio;
                 }
                 Shape::LineSegment { points, stroke } => {
-                    points[0].x *= self.scale_ratio;
-                    points[0].x += painter.clip_rect().left_top().x;
-                    points[0].y *= self.scale_ratio;
-                    points[0].y += painter.clip_rect().left_top().y;
-                    points[1].x *= self.scale_ratio;
-                    points[1].x += painter.clip_rect().left_top().x;
-                    points[1].y *= self.scale_ratio;
-                    points[1].y += painter.clip_rect().left_top().y;
+                    for point in points {
+                        *point =
+                            scaled_point(painter.clip_rect().left_top(), self.scale_ratio, *point);
+                    }
                     stroke.width *= self.scale_ratio;
                 }
                 Shape::Path(path_shape) => {
                     path_shape.stroke.width *= self.scale_ratio;
                     for point in path_shape.points.iter_mut() {
-                        point.x *= self.scale_ratio;
-                        point.x += painter.clip_rect().left_top().x;
-                        point.y *= self.scale_ratio;
-                        point.y += painter.clip_rect().left_top().y;
+                        *point =
+                            scaled_point(painter.clip_rect().left_top(), self.scale_ratio, *point);
                     }
                 }
                 _ => unreachable!(),
@@ -799,10 +791,11 @@ fn unscaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     )
 }
 
-fn scaled_rect(top_left: Pos2, scale_ratio: f32, mut rect: Rect) -> Rect {
-    rect.min = scaled_point(top_left, scale_ratio, rect.min);
-    rect.max = scaled_point(top_left, scale_ratio, rect.max);
-    rect
+fn scaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
+    Rect::from_two_pos(
+        scaled_point(top_left, scale_ratio, rect.left_top()),
+        scaled_point(top_left, scale_ratio, rect.right_bottom()),
+    )
 }
 
 fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
