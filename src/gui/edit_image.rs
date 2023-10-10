@@ -692,66 +692,31 @@ impl EditImage {
         ui.horizontal_top(|ui| {
             // todo: when the button is pressed, the enum is initialized, but the button does not keep being selected when the internal state of the enum changes
             if ui
-                .selectable_label(
-                    if let Tool::Rect { .. } = self.current_tool {
-                        true
-                    } else {
-                        false
-                    },
-                    "rectangle",
-                )
+                .selectable_label(matches!(self.current_tool, Tool::Rect { .. }), "rectangle")
                 .clicked()
             {
                 self.current_tool = Tool::Rect { start_drag: None };
             }
             if ui
-                .selectable_label(
-                    if let Tool::Circle { .. } = self.current_tool {
-                        true
-                    } else {
-                        false
-                    },
-                    "circle",
-                )
+                .selectable_label(matches!(self.current_tool, Tool::Circle { .. }), "circle")
                 .clicked()
             {
                 self.current_tool = Tool::Circle { start_drag: None };
             }
             if ui
-                .selectable_label(
-                    if let Tool::Pen { .. } = self.current_tool {
-                        true
-                    } else {
-                        false
-                    },
-                    "pen",
-                )
+                .selectable_label(matches!(self.current_tool, Tool::Pen { .. }), "pen")
                 .clicked()
             {
                 self.current_tool = Tool::Pen { line: Vec::new() };
             }
             if ui
-                .selectable_label(
-                    if let Tool::Arrow { .. } = self.current_tool {
-                        true
-                    } else {
-                        false
-                    },
-                    "arrow",
-                )
+                .selectable_label(matches!(self.current_tool, Tool::Arrow { .. }), "arrow")
                 .clicked()
             {
                 self.current_tool = Tool::Arrow { start_drag: None };
             }
             if ui
-                .selectable_label(
-                    if let Tool::Cut { .. } = self.current_tool {
-                        true
-                    } else {
-                        false
-                    },
-                    "cut",
-                )
+                .selectable_label(matches!(self.current_tool, Tool::Cut { .. }), "cut")
                 .clicked()
             {
                 self.current_tool = Tool::Cut {
