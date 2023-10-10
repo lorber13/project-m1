@@ -91,3 +91,21 @@ fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageRe
     return Err(ImageError::IoError(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Missing file extension")));
       
 }
+
+#[cfg(test)]
+mod tests{
+    #[test]
+    fn copy_clipboard_test() {
+        let img = image::ImageBuffer::new(0,0);
+        let r = crate::image_coding::start_thread_copy_to_clipboard(&img);
+        assert!(r.recv().is_ok());
+    }
+
+    #[test]
+    fn save_test() {
+        let img = image::RgbaImage::new(0,0);
+        let r = crate::image_coding::start_thread_save_image("test.png".into(), "screenshot".to_string(), "png".to_string(), img);
+        assert!(r.recv().is_ok());
+    }
+
+}

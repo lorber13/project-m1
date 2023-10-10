@@ -160,3 +160,20 @@ impl RegisteredHotkeys
         
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_copy_hotkey(){
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let r = rh.create_copy();
+        assert!(r.recv().is_ok());
+    }
+
+    #[test]
+    fn test_get_string() {
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let opt_s = rh.get_string(crate::hotkeys::HotkeyName::FullscreenScreenshot);
+        assert!(opt_s.is_none());
+    }
+}

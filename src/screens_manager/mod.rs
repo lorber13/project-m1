@@ -144,4 +144,12 @@ impl ScreensManager
     }
 }
 
-
+#[cfg(test)]
+mod tests{
+    #[test]
+    fn test_fullscreen() {
+        let sm = crate::screens_manager::ScreensManager::new(10);
+        let r = sm.start_thread_fullscreen_screenshot();
+        assert!(r.recv().is_ok());
+    }
+}
