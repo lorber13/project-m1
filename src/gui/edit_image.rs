@@ -1,3 +1,4 @@
+// DISCLAIMER: THIS CODE IS MESSY, I KNOW. I STILL HAVE TO MODULARIZE IT
 use crate::image_coding::ImageFormat;
 use eframe::egui::{
     pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
@@ -411,6 +412,7 @@ impl EditImage {
                         }
                     }
                     // todo: while dragging, the rectangle must not become a negative rectangle
+                    // todo: Possible approach, not necessarily the right one: use response.drag_delta() instead of response.hover_pos()
                     Tool::Cut {
                         rect: unscaled_rect,
                         modifying,
@@ -428,7 +430,7 @@ impl EditImage {
                                 if response.dragged() {
                                     ctx.set_cursor_icon(CursorIcon::Grabbing);
                                     // todo: work in painter dimensions, not real dimensions
-                                    // todo: refine the function for not escaping borders
+                                    // todo: refine the function that makes the rectangle not escape borders
                                     let image_rect = Rect::from_min_size(
                                         pos2(0.0, 0.0),
                                         self.texture_handle.size_vec2(),
