@@ -40,6 +40,7 @@ impl ScreensManager
 
             {
                 let mut write_lk = arc_clone.screens.write().unwrap();
+                write_lk.clear();
                 for s in Screen::all().unwrap()
                 {
                     write_lk.push((s, Mutex::new(None)));
@@ -143,4 +144,12 @@ impl ScreensManager
     }
 }
 
-
+#[cfg(test)]
+mod tests{
+    #[test]
+    fn test_fullscreen() {
+        let sm = crate::screens_manager::ScreensManager::new(10);
+        let r = sm.start_thread_fullscreen_screenshot();
+        assert!(r.recv().is_ok());
+    }
+}

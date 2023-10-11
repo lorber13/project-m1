@@ -91,7 +91,7 @@ impl RegisteredHotkeys
     }
 
 
-    //TO DO: fare eseguire da un thread separato
+    /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     pub fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), &'static str>
     {
         if let Ok(h) = HotKey::from_str(&h_str)
@@ -108,7 +108,7 @@ impl RegisteredHotkeys
         return Err("Unable to register the hotkey");
     }
 
-    //TO DO: fare eseguire da un thread separato
+    /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     pub fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), &'static str>
     {
         let temp = self.vec.write().unwrap().get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().take();
@@ -158,5 +158,22 @@ impl RegisteredHotkeys
             }
         }else {None}
         
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_copy_hotkey(){
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let r = rh.create_copy();
+        assert!(r.recv().is_ok());
+    }
+
+    #[test]
+    fn test_get_string() {
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let opt_s = rh.get_string(crate::hotkeys::HotkeyName::FullscreenScreenshot);
+        assert!(opt_s.is_none());
     }
 }
