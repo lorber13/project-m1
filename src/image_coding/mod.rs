@@ -2,6 +2,7 @@
 use arboard::{Clipboard, ImageData};
 use image::{RgbaImage, ImageError};
 use std::{sync::mpsc::{Receiver, channel}, io::stdout, path::PathBuf, ffi::OsStr};
+use std::fs::File;
 use std::io::Write;
 
 use crate::DEBUG;
@@ -83,7 +84,14 @@ fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageRe
     {
         if ImageFormat::available_formats().contains(&ext.to_str().unwrap())
         {
-            return img.save(file_output);
+            return match ext.to_str().unwrap() {
+                "Gif" => {
+                    let file = File::create(file_output).unwrap();
+                    let mut encoder = image::codecs::gif::GifEncoder::new_with_speed(file, 30);
+                    encoder.encode(&*img, img.width(), img.height(), image::ColorType::Rgba8)
+                }
+                _ => img.save(file_output)
+            }
         }
         return Err(ImageError::IoError(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid file extension")));
     }
@@ -107,5 +115,4 @@ mod tests{
         let r = crate::image_coding::start_thread_save_image("test.png".into(), "screenshot".to_string(), "png".to_string(), img);
         assert!(r.recv().is_ok());
     }
-
 }
