@@ -42,6 +42,7 @@ use menu::MainMenu;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName};
 use std::io::Write;
 use std::rc::Rc;
+use std::cell::Cell;
 
 pub enum EnumGuiState
 {
@@ -74,10 +75,10 @@ impl std::fmt::Debug for EnumGuiState
 pub struct GlobalGuiState
 {
     state: EnumGuiState,
-    alert: Rc<RefCell<Option<&'static str>>>,
+    alert: Rc<RefCell<Option<String>>>,
     save_request: Option<(RgbaImage, ImageFormat)>,
     screens_manager: Arc<screens_manager::ScreensManager>,
-    save_settings: Rc<SaveSettings>,
+    save_settings: Rc<RefCell<SaveSettings>>,
     registered_hotkeys: Arc<RegisteredHotkeys>,
     clipboard : Option<Receiver<Result<(), arboard::Error>>>, //contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard
 }
@@ -88,9 +89,9 @@ impl GlobalGuiState
 {
     fn new() -> Self
     {
-        let alert = Rc::new(RefCell::new(None));
+        let alert: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
         let registered_hotkeys = RegisteredHotkeys::new();
-        let save_settings = Rc::new(SaveSettings::new(alert.clone()));
+        let save_settings = Rc::new(RefCell::new(SaveSettings::new(alert.clone())));
         let screens_manager = screens_manager::ScreensManager::new(150);
         GlobalGuiState {
             state: EnumGuiState::MainMenu(MainMenu::new(alert.clone(), screens_manager.clone(), save_settings.clone(), registered_hotkeys.clone())),
@@ -122,8 +123,6 @@ impl GlobalGuiState
             match m.update(enabled, ctx, frame)
             {
                 MainMenuEvent::ScreenshotRequest(sd, d ) => self.start_wait_delay(d, sd, frame, ctx), 
-                MainMenuEvent::SaveConfiguration(ss) => self.save_settings = Rc::new(ss),
-                MainMenuEvent::HotkeysConfiguration(rh) => self.registered_hotkeys = rh.clone(),
                 MainMenuEvent::Nil => ()
             }
         }else {unreachable!();}
@@ -155,7 +154,7 @@ impl GlobalGuiState
                         frame.set_visible(true);
                     },
                     _ => {
-                        self.alert.borrow_mut().replace("Timer error");
+                        self.alert.borrow_mut().replace("Timer error".to_string());
                         self.switch_to_main_menu(frame);
                     }
                 }
@@ -216,7 +215,7 @@ impl GlobalGuiState
                                 self.state = EnumGuiState::RectSelection(rs);
                             }
                             Err(error_message) => {
-                                self.alert.borrow_mut().replace("An error occoured. Impossible to continue.");
+                                self.alert.borrow_mut().replace("An error occoured. Impossible to continue.".to_string());
                                 let _ = writeln!(std::io::stderr(), "Error: {}", error_message);
                             }
                         }
@@ -224,7 +223,7 @@ impl GlobalGuiState
 
                     Err(TryRecvError::Disconnected) => {
                         frame.set_visible(true);
-                        self.alert.borrow_mut().replace("An error occoured when trying to start the service. Please retry.");
+                        self.alert.borrow_mut().replace("An error occoured when trying to start the service. Please retry.".to_string());
                         self.switch_to_main_menu(frame);
                     },
                     Err(TryRecvError::Empty) => ctx.request_repaint()
@@ -314,7 +313,7 @@ impl GlobalGuiState
                     self.state = EnumGuiState::EditImage(em);
                 }
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
-                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.borrow_mut().replace("Unable to load the image. please retry"); self.switch_to_main_menu(frame);}
+                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.borrow_mut().replace("Unable to load the image. please retry".to_string()); self.switch_to_main_menu(frame);}
             }
         }else if let EnumGuiState::LoadingEditImage(None) = &mut self.state
         {
@@ -348,7 +347,8 @@ impl GlobalGuiState
 
     fn manage_save_request(&mut self)
     {
-        match (self.save_settings.get_default_dir(), self.save_settings.get_default_name())
+        let ss = self.save_settings.borrow().clone();
+        match (ss.get_default_dir(), ss.get_default_name())
         {
             (Some(dp), Some(dn)) => 
             {
@@ -409,11 +409,11 @@ impl GlobalGuiState
             {
                 Ok(Ok(_)) =>
                 {
-                    self.alert.borrow_mut().replace("Image saved!");
+                    self.alert.borrow_mut().replace("Image saved!".to_string());
                     self.switch_to_main_menu(frame);
                 },
                 Err (TryRecvError::Empty) => show_loading(ctx),
-                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.borrow_mut().replace("Error: image not saved"); self.switch_to_main_menu(frame);}
+                Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.borrow_mut().replace("Error: image not saved".to_string()); self.switch_to_main_menu(frame);}
             }
         }else {unreachable!();}
     }
@@ -434,8 +434,8 @@ impl GlobalGuiState
         {
             match rx.try_recv()
             {
-                Ok(_) =>{ self.alert.borrow_mut().replace("Image copied to clipboard"); self.clipboard = None; },
-                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Error: impossible to copy the image on the clipboard"); },
+                Ok(_) =>{ self.alert.borrow_mut().replace("Image copied to clipboard".to_string()); self.clipboard = None; },
+                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Error: impossible to copy the image on the clipboard".to_string()); },
                 Err(TryRecvError::Empty) => ()
             }
         }else {unreachable!();}

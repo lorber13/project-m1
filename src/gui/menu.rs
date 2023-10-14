@@ -5,35 +5,34 @@ use std::{sync::{Arc, mpsc::TryRecvError}, cell::RefCell};
 use super::hotkeys_settings::HotkeysSettings;
 use std::sync::mpsc::Receiver;
 use std::rc::Rc;
+use std::cell::Cell;
 
 pub enum MainMenuEvent
 {
     ScreenshotRequest(ScreenshotDim, f64),
-    SaveConfiguration(SaveSettings),
-    HotkeysConfiguration(Arc<RegisteredHotkeys>),
     Nil
 }
 enum MainMenuState 
 {
     CaptureMode(CaptureMode),
     SaveSettings(SaveSettings),
-    LoadingHotkeysSettings(Receiver<Arc<RegisteredHotkeys>>),
-    HotkeysSettings(HotkeysSettings, Arc<RegisteredHotkeys>)
+    LoadingHotkeysSettings(Receiver<()>),
+    HotkeysSettings(HotkeysSettings)
 }
 
 pub struct MainMenu
 {
     state : MainMenuState,
-    alert: Rc<RefCell<Option<&'static str>>>, 
+    alert: Rc<RefCell<Option<String>>>, 
     screens_mgr: Arc<ScreensManager>, 
-    save_settings: Rc<SaveSettings>,
+    save_settings: Rc<RefCell<SaveSettings>>,
     registered_hotkeys: Arc<RegisteredHotkeys>,
 }
 
 impl MainMenu
 {
 
-    pub fn new(alert: Rc<RefCell<Option<&'static str>>>, screens_mgr: Arc<ScreensManager>, save_settings: Rc<SaveSettings>, registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
+    pub fn new(alert: Rc<RefCell<Option<String>>>, screens_mgr: Arc<ScreensManager>, save_settings: Rc<RefCell<SaveSettings>>, registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
     {
         Self {state: MainMenuState::CaptureMode(CaptureMode::new(screens_mgr.clone())), screens_mgr, alert, save_settings, registered_hotkeys}
     }
@@ -87,9 +86,9 @@ impl MainMenu
                                 match self.state
                                 {
                                     MainMenuState::CaptureMode(_) =>{ ret = self.show_main_window( ui, ctx, frame); },
-                                    MainMenuState::SaveSettings(_) =>{ ret = self.show_save_settings( ui, ctx, frame); },
-                                    MainMenuState::HotkeysSettings(..) =>{ ret = self.show_hotkeys_settings( ui, ctx,frame); },
-                                    MainMenuState::LoadingHotkeysSettings(..) =>{ ret = self.load_hotkeys_settings(); }
+                                    MainMenuState::SaveSettings(..) =>{ self.show_save_settings( ui, ctx, frame); },
+                                    MainMenuState::HotkeysSettings(..) =>{ self.show_hotkeys_settings( ui, ctx,frame); },
+                                    MainMenuState::LoadingHotkeysSettings(..) =>{ self.load_hotkeys_settings(); }
                                 }
                             });
                         });
@@ -132,26 +131,24 @@ impl MainMenu
         if crate::DEBUG {print!("DEBUG: switch to save settings");}
         match self.state
         {
-            MainMenuState::SaveSettings(_) => (), //non c'è nulla di nuovo da visualizzare
-            _ => self.state = MainMenuState::SaveSettings(SaveSettings::clone(&*self.save_settings)) //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+            MainMenuState::SaveSettings(..) => (), //non c'è nulla di nuovo da visualizzare
+            _ => {self.state = MainMenuState::SaveSettings(self.save_settings.borrow().clone());} //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
         }
         
     }
 
-    fn show_save_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+    fn show_save_settings(&mut self, ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame)
     {
-        let mut ret = MainMenuEvent::Nil;
         if let MainMenuState::SaveSettings(ss) = &mut self.state
         {
             match ss.update(ui, ctx)
             {
-                SettingsEvent::Saved => { ret = MainMenuEvent::SaveConfiguration(ss.clone()); self.switch_to_main_window(frame); },
-                SettingsEvent::Aborted => self.switch_to_main_window(frame),
+                SettingsEvent::Saved => {self.save_settings.replace(ss.clone()); self.switch_to_main_window(frame);}
+                SettingsEvent::Aborted  => { self.switch_to_main_window(frame); },
                 SettingsEvent::Nil => ()
             }  
         }else 
         {unreachable!();}
-        ret
     }
 
      //-----------------------------HOTKEYS SETTINGS-------------------------------------------------------------------
@@ -160,7 +157,7 @@ impl MainMenu
          if crate::DEBUG {print!("DEBUG: switch to hotkeys settings");}
          match self.state {
              MainMenuState::HotkeysSettings(..) | MainMenuState::LoadingHotkeysSettings(..) => (), //non c'è nulla di nuovo da visualizzare
-             _ => self.state = MainMenuState::LoadingHotkeysSettings(self.registered_hotkeys.create_copy()) //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+             _ => self.state = MainMenuState::LoadingHotkeysSettings(self.registered_hotkeys.prepare_for_updates()) //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
          }
          
      }
@@ -172,29 +169,26 @@ impl MainMenu
         {
             match r.try_recv()
             {
-                Ok(rh) => self.state = MainMenuState::HotkeysSettings(HotkeysSettings::new(self.alert.clone(), rh.clone()), rh.clone()), //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
-                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Loading failed");},
+                Ok(()) => self.state = MainMenuState::HotkeysSettings(HotkeysSettings::new(self.alert.clone(), self.registered_hotkeys.clone())), //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Loading failed".to_string());},
                 Err(TryRecvError::Empty) => ()
             }
         }else {unreachable!();}
         ret
      }
  
-     fn show_hotkeys_settings(&mut self,  ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) -> MainMenuEvent
+     fn show_hotkeys_settings(&mut self,  ui: &mut Ui, ctx: &Context, frame: &mut eframe::Frame) 
      {
-         let mut ret = MainMenuEvent::Nil;
-         if let MainMenuState::HotkeysSettings(hs, rh) = &mut self.state
+         if let MainMenuState::HotkeysSettings(hs) = &mut self.state
          {
             self.registered_hotkeys.set_listen_enabled(false);
              match hs.update(ui, ctx)
              {
-                 SettingsEvent::Saved => { ret = MainMenuEvent::HotkeysConfiguration(rh.clone()); self.registered_hotkeys = rh.clone(); self.switch_to_main_window(frame); },
-                 SettingsEvent::Aborted => self.switch_to_main_window(frame),
+                 SettingsEvent::Saved  | SettingsEvent::Aborted => { self.switch_to_main_window(frame); },
                  SettingsEvent::Nil => ()
              }  
          }else 
          {unreachable!();}
-         ret
      }
 
 }

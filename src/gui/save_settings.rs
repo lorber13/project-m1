@@ -61,12 +61,12 @@ pub struct SaveSettings
 {
     default_dir: DefaultDir,
     default_name: DefaultName,
-    alert: Rc<RefCell<Option<&'static str>>>
+    alert: Rc<RefCell<Option<String>>>
 }
 
 impl SaveSettings
 {
-    pub fn new(alert: Rc<RefCell<Option<&'static str>>>) -> Self
+    pub fn new(alert: Rc<RefCell<Option<String>>>) -> Self
     {
         Self {default_dir: DefaultDir { enabled: false, path: "".to_string() }, 
                 default_name: DefaultName { enabled: false, name: "".to_string(), mode: Cell::new(DefaultNameMode::Timestamp),},
@@ -140,7 +140,10 @@ impl SaveSettings
                         if self.default_dir.enabled && ( self.default_dir.path.len() == 0 || !std::path::Path::new(&self.default_dir.path).exists())
                         {
                             if crate::DEBUG {println!("Found an invalid dir path");}
-                            self.alert.borrow_mut().replace("invalid default directory path");
+                            self.alert.borrow_mut().replace("Invalid default directory path.".to_string());
+                        }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.len() == 0
+                        {
+                            self.alert.borrow_mut().replace("Default name cannot be empty.".to_string());
                         }else {
                             ret = SettingsEvent::Saved;
                         }

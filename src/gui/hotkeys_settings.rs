@@ -3,11 +3,10 @@ use eframe::egui::{Ui, Event, Context, ScrollArea};
 use crate::itc::SettingsEvent;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName, self};
 use eframe::egui::KeyboardShortcut;
-use std::io::stderr;
-use std::io::Write;
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 #[derive(Clone)]
 enum HotkeySettingsState
@@ -35,7 +34,8 @@ pub struct HotkeysSettings
 {
     state: HotkeySettingsState,
     registered_hotkeys: Arc<RegisteredHotkeys>,
-    alert: Rc<RefCell<Option<&'static str>>>, 
+    alert: Rc<RefCell<Option<String>>>,
+    workers_channel: Rc<(Sender<Result<(), &'static str>>, Receiver<Result<(), &'static str>>)> 
 }
 
 impl HotkeysSettings
@@ -43,12 +43,16 @@ impl HotkeysSettings
     /// Parametri:
     /// -   <b>alert</b>: smartpointer allo stato di errore globale di tutta l'applicazione;<br>
     /// -   <b>registered_hotkeys</b>: smartpointer contenente la struct RegisteredHotkeys che potrà
-    ///     essere modificata da questo modulo (conviene passare a questo modulo una copia delle RegisteredHotkeys
-    ///     memorizzate a livello globale, così che eventuali operazioni di rollback o di gestione errori
-    ///     non lascino le RegisteredHotkeys originali in uno stato incoerente).
-    pub fn new(alert: Rc<RefCell<Option<&'static str>>>, registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
+    ///     essere modificata da questo modulo. In particolare, il modulo richiederà degli updates
+    ///     a RegisteredHotkeys, la quale li memorizzerà internamente, ma non li applicherà
+    ///     fino a quando non viene chiamato il metodo <i>RegisteredHotkeys::update_changes(&self)</i>.
+    ///     Il metodo viene infatti richiamato alla pressione del tasto "Save".<br>
+    ///     Lo spazio per memorizzare le richieste di updates deve essere preparato opportunamente
+    ///     richiamando il metodo <i>RegisteredHotkeys::prepare_for_updates(&self)</i> prima dell'esecuzione
+    ///     di questo metodo.
+    pub fn new(alert: Rc<RefCell<Option<String>>>, registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
     {
-        Self {state: HotkeySettingsState::Idle, registered_hotkeys, alert}
+        Self {state: HotkeySettingsState::Idle, registered_hotkeys, alert, workers_channel: Rc::new(channel())}
     }
 
     /// Mostra, per ogni possibile hotkey in RegisteredHotkeys, un form per la sua configurazione.<br>
@@ -61,9 +65,17 @@ impl HotkeysSettings
     /// -   SettingsEvent::Save, se è stato premuto il bottone "Save";
     /// -   SettingsEvent::Abort, se è stato premuto il bottone "Abort";
     /// -   SettingsEvent::Nil altrimenti.
-    pub fn update(&mut self, ui: &mut Ui, ctx: &Context) -> SettingsEvent
+    pub fn update(&mut self, ui: &mut Ui, ctx: &Context)  -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
+
+
+        //controllo se c'è almeno un worker che ha ritornato errore
+        while let Ok(r) = self.workers_channel.1.try_recv()
+        {
+            if let Err(e) = r {self.alert.borrow_mut().replace(e.to_string()); break;}
+        }
+
 
         //controllo se è in corso la registrazione di una hotkey
         if let HotkeySettingsState::Registering(hn) = &mut self.state
@@ -73,13 +85,12 @@ impl HotkeysSettings
             {
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
                 self.state = HotkeySettingsState::Idle;
-                if let Err(e) = self.registered_hotkeys.register(str_kh, hn_clone)
-                {
-                    self.alert.borrow_mut().replace(e);
-                }
+                self.registered_hotkeys.request_register(str_kh, hn_clone, self.workers_channel.0.clone());
             }
         }
         
+
+        //gui
         ScrollArea::new([true, false]).show(ui, |ui|
         {
             ui.vertical(|ui|
@@ -100,7 +111,13 @@ impl HotkeysSettings
                             ui.add_enabled_ui(self.state == HotkeySettingsState::Idle, |ui|
                             {
                                 if ui.button("Save").clicked() {
-                                    ret = SettingsEvent::Saved;
+
+                                    match self.registered_hotkeys.update_changes()
+                                    {
+                                        Ok(()) => { ret = SettingsEvent::Saved; },
+                                        Err(e) => { self.alert.borrow_mut().replace(e); }
+                                    };
+                                    
                                 }
                             });
                             if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
@@ -148,11 +165,7 @@ impl HotkeysSettings
 
                         if ui.button("Delete hotkey").clicked()
                         {
-                            if let Err(e) = self.registered_hotkeys.unregister(hn)
-                            {
-                                self.alert.borrow_mut().replace("Error: unable to complete the operation");
-                                let _= write!(stderr(), "Err = {}", e);
-                            }
+                            self.registered_hotkeys.request_unregister(hn)
                         } 
 
                         
@@ -189,7 +202,7 @@ impl HotkeysSettings
                       {
                         ret = Some(KeyboardShortcut::new(modifiers.clone(), key.clone()));
                       }else {
-                          self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.");
+                          self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
                           self.state = HotkeySettingsState::Idle;
                       }
                 }
