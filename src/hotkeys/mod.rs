@@ -1,26 +1,15 @@
 
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, hotkey};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use global_hotkey::hotkey::HotKey;
-use std::cmp::Ordering;
 use std::str::FromStr;
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, RwLock};
 
-use crate::DEBUG;
-
 pub const N_HOTK: usize = 2;        //il numero di hotkey diverse presenti nella enum sottostante
-#[derive(Clone, Copy)]
 pub enum HotkeyName
 {
     FullscreenScreenshot,
     RectScreenshot
-}
-
-impl PartialEq for HotkeyName
-{
-    fn eq(&self, other: &Self) -> bool {
-        <HotkeyName as Into<usize>>::into(*self) == <HotkeyName as Into<usize>>::into(*other)
-    }
 }
 
 impl Into<usize> for HotkeyName
@@ -63,8 +52,7 @@ impl From<usize> for HotkeyName
 pub struct RegisteredHotkeys
 {
     pub vec: RwLock<Vec<Option<(HotKey, String)>>>,
-    ghm: Arc<GlobalHotKeyManager>,
-    listen_enabled: Arc<RwLock<bool>>   //flag che indica se l'ascolto delle hotkeys è correntemente abilitato o no. Si trova in un Arc perchè rimane unico a livello di processo
+    ghm: Arc<GlobalHotKeyManager>
 }
 
 
@@ -75,7 +63,7 @@ impl RegisteredHotkeys
     {
         let mut vec = vec![];
         for _ in 0..N_HOTK {vec.push(None);}
-        let ret = Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()), listen_enabled: Arc::new(RwLock::new(true)) };
+        let ret = Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()) };
         Arc::new(ret)
     }
 
@@ -96,24 +84,10 @@ impl RegisteredHotkeys
                 }
             }
 
-            tx.send(Arc::new(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone(), listen_enabled: clone.listen_enabled.clone()}))
+            tx.send(Arc::new(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone()}))
         });
 
         rx
-    }
-
-    fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool
-    {
-        for opt in self.vec.read().unwrap().iter()
-        {
-            if let Some((_, s)) = &*opt
-            {
-                if DEBUG {println!("\nDEBUG: comparing strings {} and {}", s, hotkey);}
-                if s == hotkey {return true;}
-            }
-        }
-
-        false
     }
 
 
@@ -122,11 +96,6 @@ impl RegisteredHotkeys
     {
         if let Ok(h) = HotKey::from_str(&h_str)
         {
-            //controllo che la stessa combinazione di tasti non sia già associata ad un altro comando:
-            if self.check_if_already_registered(&h_str) {return Err("Hotkey already registered");}
-
-            if crate::DEBUG {println!("\nDEBUG: Hotkey not registered yet");}
-
             if self.ghm.register(h).is_ok() 
             { 
                 let mut v = self.vec.write().unwrap();
@@ -155,8 +124,6 @@ impl RegisteredHotkeys
 
     pub fn listen_hotkeys(self: &Arc<Self>) -> Option<HotkeyName>
     {
-        if ! *self.listen_enabled.read().unwrap() {return None;}
-
         if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv()
         {
             for (i, opt) in self.vec.read().unwrap().iter().enumerate()
@@ -180,7 +147,7 @@ impl RegisteredHotkeys
         return None;
     }
 
-    pub fn get_hotkey_string(self: &Arc<Self>, name: HotkeyName) -> Option<String>
+    pub fn get_string(self: &Arc<Self>, name: HotkeyName) -> Option<String>
     {
         if let Some(opt) = self.vec.read().unwrap().get(<HotkeyName as Into<usize>>::into(name))
         {
@@ -192,9 +159,21 @@ impl RegisteredHotkeys
         }else {None}
         
     }
+}
 
-    pub fn set_listen_enabled(&self, val: bool)
-    {
-        *self.listen_enabled.write().unwrap() = val;
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_copy_hotkey(){
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let r = rh.create_copy();
+        assert!(r.recv().is_ok());
+    }
+
+    #[test]
+    fn test_get_string() {
+        let rh = crate::hotkeys::RegisteredHotkeys::new();
+        let opt_s = rh.get_string(crate::hotkeys::HotkeyName::FullscreenScreenshot);
+        assert!(opt_s.is_none());
     }
 }
