@@ -1,96 +1,159 @@
-use eframe::egui::{Ui, Event, Context};
+use eframe::egui::{Ui, Event, Context, ScrollArea};
 
 use crate::itc::SettingsEvent;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName, self};
 use eframe::egui::KeyboardShortcut;
-use std::io::stderr;
-use std::io::Write;
 use std::sync::Arc;
 use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc::{Receiver, Sender, channel};
 
-use super::error_alert;
+#[derive(Clone)]
+enum HotkeySettingsState
+{
+    Idle,
+    Registering(HotkeyName)
+}
 
+impl PartialEq for HotkeySettingsState
+{
+    fn eq(&self, rhs: &Self) -> bool
+    {
+        match (self, rhs)
+        {
+            (HotkeySettingsState::Idle, HotkeySettingsState::Idle) => true,
+            (HotkeySettingsState::Registering(hn1), HotkeySettingsState::Registering(hn2)) => hn1 == hn2,
+            _ => false
+        }
+    }
+}
+
+/// Stato della parte della gui che visualizza la schermata di impostazione delle Hotkeys.<br>
 #[derive(Clone)]
 pub struct HotkeysSettings
 {
-    registering: i32,
-    registered_hotkeys: Arc<RegisteredHotkeys>
+    state: HotkeySettingsState,
+    registered_hotkeys: Arc<RegisteredHotkeys>,
+    alert: Rc<RefCell<Option<String>>>,
+    workers_channel: Rc<(Sender<Result<(), &'static str>>, Receiver<Result<(), &'static str>>)> 
 }
 
 impl HotkeysSettings
 {
-    pub fn new(registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
+    /// Parametri:
+    /// -   <b>alert</b>: smartpointer allo stato di errore globale di tutta l'applicazione;<br>
+    /// -   <b>registered_hotkeys</b>: smartpointer contenente la struct RegisteredHotkeys che potrà
+    ///     essere modificata da questo modulo. In particolare, il modulo richiederà degli updates
+    ///     a RegisteredHotkeys, la quale li memorizzerà internamente, ma non li applicherà
+    ///     fino a quando non viene chiamato il metodo <i>RegisteredHotkeys::update_changes(&self)</i>.
+    ///     Il metodo viene infatti richiamato alla pressione del tasto "Save".<br>
+    ///     Lo spazio per memorizzare le richieste di updates deve essere preparato opportunamente
+    ///     richiamando il metodo <i>RegisteredHotkeys::prepare_for_updates(&self)</i> prima dell'esecuzione
+    ///     di questo metodo.
+    pub fn new(alert: Rc<RefCell<Option<String>>>, registered_hotkeys: Arc<RegisteredHotkeys>) -> Self
     {
-        Self {registering:-1, registered_hotkeys}
+        Self {state: HotkeySettingsState::Idle, registered_hotkeys, alert, workers_channel: Rc::new(channel())}
     }
 
-    pub fn update(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui, ctx: &Context) -> SettingsEvent
+    /// Mostra, per ogni possibile hotkey in RegisteredHotkeys, un form per la sua configurazione.<br>
+    /// Ogni form è disabilitato se è in corso la registrazione di un'altra hotkey.<br>
+    /// Durante la registrazione di una hotkey, viene visualizzato un messaggio con le istruzioni per l'user.
+    /// Nel caso venga ricevuta in input una hotkey valida, questo metodo provvede a richiederne la registrazione
+    /// in RegisteredHotkeys.<br>
+    /// 
+    /// Ritorna <b>SettingsEvent</b>:
+    /// -   SettingsEvent::Save, se è stato premuto il bottone "Save";
+    /// -   SettingsEvent::Abort, se è stato premuto il bottone "Abort";
+    /// -   SettingsEvent::Nil altrimenti.
+    pub fn update(&mut self, ui: &mut Ui, ctx: &Context)  -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
 
-        error_alert::show_error_alert(ctx, &mut alert.borrow_mut());
+
+        //controllo se c'è almeno un worker che ha ritornato errore
+        while let Ok(r) = self.workers_channel.1.try_recv()
+        {
+            if let Err(e) = r {self.alert.borrow_mut().replace(e.to_string()); break;}
+        }
 
 
         //controllo se è in corso la registrazione di una hotkey
-        if self.registering >= 0
+        if let HotkeySettingsState::Registering(hn) = &mut self.state
         {
-            if let Some(new_hk) = self.registration_phase(alert.clone(), ui)
+            let hn_clone = hn.clone(); //necessario clonare per poter distruggere il riferimento &mut creato sopra
+            if let Some(new_hk) = self.registration_phase(ui)
             {
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
-                if let Err(e) = self.registered_hotkeys.register(str_kh, HotkeyName::from(self.registering as usize))
-                {
-                    return SettingsEvent::Error(e);
-                }
-                self.registering = -1;
+                self.state = HotkeySettingsState::Idle;
+                self.registered_hotkeys.request_register(str_kh, hn_clone, self.workers_channel.0.clone());
             }
         }
         
-        ui.vertical(|ui|
-            {
 
-                for i in 0..hotkeys::N_HOTK
+        //gui
+        ScrollArea::new([true, false]).show(ui, |ui|
+        {
+            ui.vertical(|ui|
                 {
-                    let mut label: String = HotkeyName::from(i).into();
-                    label.push_str(": ");
-                    let value = match self.registered_hotkeys.get_string(HotkeyName::from(i)) {Some(str) => str.clone(), None => String::from("")};
-
-                    self.row_gui(alert.clone(), ui, label, value, i);
-                }
-
-                ui.separator();
-                ui.horizontal(|ui|
+    
+                    for i in 0..hotkeys::N_HOTK
                     {
-                        if ui.button("Save").clicked() {
-                            if self.registering >= 0
-                            {
-                                alert.borrow_mut().replace("Invalid operation. Please press done and then proceed");
-                            }else {
-                                ret = SettingsEvent::Saved;
-                            }
-                        }
-                        if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
-                    });
-
-                if self.registering >= 0
-                {
-                    ui.vertical(|ui|
-                    {
-                        ui.add_space(50.0);
-                        ui.horizontal(|ui|
+                        let value = match self.registered_hotkeys.get_hotkey_string(HotkeyName::from(i)) {Some(str) => str.clone(), None => String::from("")};
+    
+                        self.row_gui(ui, HotkeyName::from(i), value);
+                    }
+    
+                    ui.separator();
+                    ui.add_space(30.0);
+                    ui.horizontal(|ui|
                         {
-                            ui.heading("?");
-                            ui.code("HELP: press at least one modifier and an alphabetic key.\nThe letter must be the last button to be pressed.");
-                        })
-                    });
-                }
-            });
+                            //non si può salvare se è in corso la registrazione di una hotkey
+                            ui.add_enabled_ui(self.state == HotkeySettingsState::Idle, |ui|
+                            {
+                                if ui.button("Save").clicked() {
+
+                                    match self.registered_hotkeys.update_changes()
+                                    {
+                                        Ok(()) => { ret = SettingsEvent::Saved; },
+                                        Err(e) => { self.alert.borrow_mut().replace(e); }
+                                    };
+                                    
+                                }
+                            });
+                            if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
+                        });
+    
+                    //messaggio di help che viene visualizzato mentre si sta registrando una hotkey
+                    if self.state != HotkeySettingsState::Idle
+                    {
+                        ui.vertical(|ui|
+                        {
+                            ui.add_space(50.0);
+                            ui.horizontal(|ui|
+                            {
+                                ui.heading("?");
+                                ui.code("HELP: press at least one modifier and an alphabetic key.\nThe letter must be the last button to be pressed.\nWhen you press the letter, also the modifiers have to be pressed simoultaneously.\nIf it doesn't work, make the pressure last longer.");
+                            })
+                        });
+                    }
+                });
+        });
 
         ret
     }
 
-    fn row_gui(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui, label: String, value: String, row_n: usize)
+    /// Mostra una riga con etichetta (della hotkey), stringa che rappresenta la combinazione di tasti, bottoni per 
+    /// avviare la registrazione o per eliminare la hotkey.<br>
+    /// Parametri:
+    /// - <b>hn<b>, identificaivo della hotkey;
+    /// - <b>value</b>, combinazione di tasti associata;
+    /// Se è in corso la registrazione di un'altra hotkey, i bottoni di questa riga vengono disabilitati.
+    fn row_gui(&mut self, ui: &mut Ui, hn: HotkeyName, value: String)
     {
-        ui.add_enabled_ui(self.registering < 0 || self.registering as usize == row_n, |ui|
+        let mut label: String = hn.into();
+        label.push_str(": ");
+
+        ui.add_enabled_ui(self.state == HotkeySettingsState::Idle || self.state == HotkeySettingsState::Registering(hn), |ui|
         {
             ui.horizontal(|ui|
                 {
@@ -102,18 +165,14 @@ impl HotkeysSettings
 
                         if ui.button("Delete hotkey").clicked()
                         {
-                            if let Err(e) = self.registered_hotkeys.unregister(HotkeyName::from(row_n))
-                            {
-                                alert.borrow_mut().replace("Error: unable to complete the operation");
-                                write!(stderr(), "Err = {}", e);
-                            }
+                            self.registered_hotkeys.request_unregister(hn)
                         } 
 
                         
                         if ui.button("Set hotkey").clicked()
                         {
                             //avvia la registrazione della hotkey
-                            self.registering = row_n as i32;
+                            self.state = HotkeySettingsState::Registering(hn);
                         }
  
                     });
@@ -123,7 +182,12 @@ impl HotkeysSettings
         
     }
 
-    fn registration_phase(&mut self, alert: RefCell<Option<&'static str>>, ui: &mut Ui) -> Option<KeyboardShortcut>
+    /// Controlla tutti gli input events. Se tra questi c'è la pressione di un tasto lettera, controlla se contemporaneamente
+    /// sono premuti altri tasti di controllo:
+    /// - in caso affermativo, costruisce un oggetto <b>KeyboardShortcut</b> con i tasti premuti e lo ritorna;
+    /// - in caso negativo, segnala, inserendo una stringa nell'alert globale, che la combinazione non è valida 
+    /// (<i>una hotkey valida è composta da almeno un tasto di controllo e un'unica lettera</i>)
+    fn registration_phase(&mut self, ui: &mut Ui) -> Option<KeyboardShortcut>
     {
         let mut ret = None;
         let events = ui.input(|i| {i.events.clone()});
@@ -132,13 +196,14 @@ impl HotkeysSettings
             match event
             {
                 //la prima lettera premuta termina il processo di registrazione della hotkey
-                Event::Key{key, pressed: _ , modifiers, repeat}  =>  //TO DO: capire come usare pressed per migliorare la performace
+                Event::Key{key, pressed: _ , modifiers, repeat}  =>  
                 {
                       if modifiers.any() && *repeat == false
                       {
                         ret = Some(KeyboardShortcut::new(modifiers.clone(), key.clone()));
                       }else {
-                          alert.borrow_mut().replace("Invalid shortcut. Please press any modifier before the char. Press each button only once.");
+                          self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
+                          self.state = HotkeySettingsState::Idle;
                       }
                 }
                 _ => ()
@@ -149,70 +214,3 @@ impl HotkeysSettings
 
 
 }
-/*
-impl eframe::App for Content {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Shortcut Registration");
-            if self.setting_hotkeys {
-                if ctx.input(|i| any_key_released(i, self.previous_frame_modifiers)) {
-                    self.setting_hotkeys = false;
-                    println!("set {}!", self.hotkey);
-                    self.previous_frame_modifiers = egui::Modifiers::NONE;
-                } else {
-                    self.hotkey.update(
-                        ctx.input(|i| i.keys_down.clone()),
-                        ctx.input(|i| i.modifiers),
-                    ); // todo: high cost of cloning every time
-                    ui.label(self.hotkey.to_string());
-                    ctx.input(|i| self.previous_frame_modifiers = i.modifiers);
-                }
-            } else {
-                if ui.button("Set").clicked() {
-                    self.setting_hotkeys = true;
-                }
-            }
-        });
-    }
-}
-
-
-
-#[derive(Default)]
-struct Hotkey {
-    keys: HashSet<egui::Key>,
-    modifiers: egui::Modifiers,
-}
-
-impl Hotkey {
-    fn update(&mut self, keys: HashSet<egui::Key>, modifiers: egui::Modifiers) {
-        self.keys = keys;
-        self.modifiers = modifiers;
-    }
-}
-
-impl Display for Hotkey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut str = String::new();
-        str.push_str(&ModifierNames::NAMES.format(&self.modifiers, false)); // todo: macOs
-        for key in self.keys.iter() {
-            str.push('+');
-            str.push_str(key.name());
-        }
-        write!(f, "{str}")
-    }
-}
-
-fn any_key_released(input: &egui::InputState, previous_frame_modifiers: egui::Modifiers) -> bool {
-        input.events.iter().any(|event| {
-            if let egui::Event::Key {
-                key: _key, pressed, ..
-            } = event
-            {
-                !*pressed
-            } else {
-                false
-            }
-        }) || !input.modifiers.contains(previous_frame_modifiers)
-    }
-*/

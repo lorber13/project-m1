@@ -1,15 +1,27 @@
 
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, hotkey};
 use global_hotkey::hotkey::HotKey;
+use std::cmp::Ordering;
+use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, channel, Sender};
 use std::sync::{Arc, RwLock};
 
+use crate::DEBUG;
+
 pub const N_HOTK: usize = 2;        //il numero di hotkey diverse presenti nella enum sottostante
+#[derive(Clone, Copy)]
 pub enum HotkeyName
 {
     FullscreenScreenshot,
     RectScreenshot
+}
+
+impl PartialEq for HotkeyName
+{
+    fn eq(&self, other: &Self) -> bool {
+        <HotkeyName as Into<usize>>::into(*self) == <HotkeyName as Into<usize>>::into(*other)
+    }
 }
 
 impl Into<usize> for HotkeyName
@@ -49,10 +61,13 @@ impl From<usize> for HotkeyName
     }
 }
 
+
 pub struct RegisteredHotkeys
 {
-    pub vec: RwLock<Vec<Option<(HotKey, String)>>>,
-    ghm: Arc<GlobalHotKeyManager>
+    backup: Vec<RwLock<Option<(HotKey, String)>>>,
+    pub vec: Vec<RwLock<Option<String>>>, 
+    ghm: GlobalHotKeyManager,
+    listen_enabled: RwLock<bool>
 }
 
 
@@ -62,73 +77,169 @@ impl RegisteredHotkeys
     pub fn new() -> Arc<Self>
     {
         let mut vec = vec![];
-        for _ in 0..N_HOTK {vec.push(None);}
-        let ret = Self { vec: RwLock::new(vec), ghm: Arc::new(GlobalHotKeyManager::new().unwrap()) };
+        let mut backup = vec![];
+        for _ in 0..N_HOTK {vec.push(RwLock::new(None)); backup.push(RwLock::new(None));}
+        let ret = Self { vec, backup, ghm: GlobalHotKeyManager::new().unwrap(), listen_enabled: RwLock::new(true) };
         Arc::new(ret)
     }
 
-    pub fn create_copy(self: &Arc<Self>) -> Receiver<Arc<Self>>
+    pub fn update_changes(self: &Arc<Self>) -> Result<(), String>
+    {
+        let mut ret = Ok(());
+        for i in 0..N_HOTK
+        {
+            if DEBUG {println!("DEBUG: comparing hotkeys {}", i);}
+
+            let temp1 ;
+                let temp2;
+                {
+                    temp1 = self.vec.get(i).unwrap().read().unwrap().clone();
+                    temp2 = self.backup.get(i).unwrap().read().unwrap().clone();
+                }
+            match (temp1, temp2)
+            {
+                (None, None) => (),
+                (None, Some(..)) => ret = self.unregister(HotkeyName::from(i)),
+                (Some(s), None) => ret = self.register(s.to_string(), HotkeyName::from(i)),
+                (Some(s1), Some((_, s2))) =>
+                {
+                    if s1.cmp(&s2) != Ordering::Equal
+                    {
+                        ret = self.register(s1.to_string(), HotkeyName::from(i))
+                    }
+                }
+            }
+            
+            if ret.is_err() {return ret;}
+            if DEBUG {println!("DEBUG: hotkeys {} done", i);}
+        }
+
+        ret
+    }
+
+    pub fn prepare_for_updates(self: &Arc<Self>) -> Receiver<()>
     {
         let (tx, rx) = channel();
-        let clone = self.clone();
+        let self_clone = self.clone();
 
         std::thread::spawn(move||
         {
-            let mut vec: Vec<Option<(HotKey, String)>> = vec![];
-            for opt in clone.vec.read().unwrap().iter()
+            for i in 0..N_HOTK
             {
-                match opt
+                let temp1 ;
+                let temp2;
                 {
-                    None => vec.push(None),
-                    Some((h, s)) => vec.push(Some((h.clone(), s.clone())))
+                    temp1 = self_clone.vec.get(i).unwrap().read().unwrap().clone();
+                    temp2 = self_clone.backup.get(i).unwrap().read().unwrap().clone();
+                }
+                match (temp1, temp2)
+                {
+                    (None, None) => (),
+                    (None, Some((_, s))) => {self_clone.vec.get(i).unwrap().write().unwrap().replace(s.clone()); },
+                    (Some(s), None) => {self_clone.vec.get(i).unwrap().write().unwrap().take(); },
+                    (Some(s1), Some((_, s2))) =>
+                    {
+                        if s1.cmp(&s2) != Ordering::Equal
+                        {
+                            self_clone.vec.get(i).unwrap().write().unwrap().replace(s2.clone());
+                        }
+                    }
+                }
+            }
+            tx.send(());
+        });
+        rx
+    }
+
+    fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool
+    {
+        for opt in self.vec.iter()
+        {
+            if let Some( s) = &*opt.read().unwrap()
+            {
+                if DEBUG {println!("\nDEBUG: comparing strings {} and {}", s, hotkey);}
+                if s == hotkey {return true;}
+            }
+        }
+
+        false
+    }
+
+    pub fn request_register(self: &Arc<Self>, h_str: String, name: HotkeyName, tx: Sender<Result<(), &'static str>>) 
+    {
+        let self_clone = self.clone();
+
+        std::thread::spawn(move||
+        {
+            let mut ret = Ok(());
+
+            //controllo che la stessa combinazione di tasti non sia già associata ad un altro comando:
+            if self_clone.check_if_already_registered(&h_str) {ret= Err("Hotkey already registered");}
+            else {
+                if let Ok(h) = HotKey::from_str(&h_str)
+                {
+                    self_clone.vec.get(<HotkeyName as Into<usize>>::into(name)).unwrap().write().unwrap().replace(h_str);
                 }
             }
 
-            tx.send(Arc::new(Self {vec: RwLock::new(vec), ghm: clone.ghm.clone()}))
+            tx.send(ret);
         });
-
-        rx
     }
 
 
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
-    pub fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), &'static str>
+    fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String>
     {
         if let Ok(h) = HotKey::from_str(&h_str)
         {
-            if self.ghm.register(h).is_ok() 
+            //if crate::DEBUG {println!("\nDEBUG: Hotkey not registered yet");}
+
+            match self.ghm.register(h) 
             { 
-                let mut v = self.vec.write().unwrap();
-                v.get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().replace((h, h_str));
-                return Ok(());
+                Ok(()) =>
+                {
+                    if DEBUG{println!("DEBUG: hotkey registered.\n The lock is {:?}", self.backup.get(<HotkeyName as Into<usize>>::into(name)).unwrap());}
+                    self.backup.get(<HotkeyName as Into<usize>>::into(name)).unwrap().write().unwrap().replace((h, h_str));
+                    if DEBUG{println!("DEBUG: backup modified");}
+                    return Ok(());
+                },
+                Err (e) => return Err(format!("Unable to register the hotkey related to command {}.\nError: {}", <HotkeyName as Into<String>>::into(name), e.to_string()))
+                
             } 
             
         }
         
-        return Err("Unable to register the hotkey");
+        return Err(format!("Unable to register the hotkey related to command {}", <HotkeyName as Into<String>>::into(name)));
+    }
+
+    pub fn request_unregister(self: &Arc<Self>, name: HotkeyName)
+    {
+        let _ = self.vec.get(<HotkeyName as Into<usize>>::into(name)).unwrap().write().unwrap().take();
     }
 
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
-    pub fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), &'static str>
+    fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), String>
     {
-        let temp = self.vec.write().unwrap().get_mut(<HotkeyName as Into<usize>>::into(name)).unwrap().take();
-        if let Some((h, _)) = temp 
+        let temp = self.backup.get(<HotkeyName as Into<usize>>::into(name)).unwrap().write().unwrap().take();
+        if let Some((h, s)) = temp 
         {
             if self.ghm.unregister(h).is_ok()
             {
                 return Ok(());
             }
         }
-        return Err("Unable to unregister the hotkey ");
+        return Err(format!("Unable to unregister the hotkey related to command {}", <HotkeyName as Into<String>>::into(name)));
     }
 
     pub fn listen_hotkeys(self: &Arc<Self>) -> Option<HotkeyName>
     {
+        if ! *self.listen_enabled.read().unwrap() {return None;}
+
         if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv()
         {
-            for (i, opt) in self.vec.read().unwrap().iter().enumerate()
+            for (i, opt) in self.backup.iter().enumerate()
             {
-                match opt
+                match opt.read().unwrap().clone()
                 {
                     None => (),
                     Some((h, _)) =>
@@ -147,33 +258,18 @@ impl RegisteredHotkeys
         return None;
     }
 
-    pub fn get_string(self: &Arc<Self>, name: HotkeyName) -> Option<String>
+    pub fn get_hotkey_string(self: &Arc<Self>, name: HotkeyName) -> Option<String>
     {
-        if let Some(opt) = self.vec.read().unwrap().get(<HotkeyName as Into<usize>>::into(name))
+        match self.vec.get(<HotkeyName as Into<usize>>::into(name)).unwrap().read().unwrap().as_deref()
         {
-            match opt
-            {
-                None => None,
-                Some((_, hk_str)) => Some(String::clone(hk_str))
-            }
-        }else {None}
+            None => None,
+            Some(hk_str) => Some(hk_str.to_string())
+        }
         
     }
-}
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_copy_hotkey(){
-        let rh = crate::hotkeys::RegisteredHotkeys::new();
-        let r = rh.create_copy();
-        assert!(r.recv().is_ok());
-    }
-
-    #[test]
-    fn test_get_string() {
-        let rh = crate::hotkeys::RegisteredHotkeys::new();
-        let opt_s = rh.get_string(crate::hotkeys::HotkeyName::FullscreenScreenshot);
-        assert!(opt_s.is_none());
+    pub fn set_listen_enabled(&self, val: bool)
+    {
+        *self.listen_enabled.write().unwrap() = val;
     }
 }

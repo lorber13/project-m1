@@ -25,7 +25,6 @@ pub enum SettingsEvent
     Saved,
     Aborted,
     Nil,
-    Error(&'static str)
 }
 
 #[derive(Clone, Copy)]

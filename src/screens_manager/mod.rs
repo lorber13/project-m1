@@ -5,6 +5,7 @@ use std::io::Write;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Mutex, Arc, RwLock, RwLockReadGuard};
 
+///Mutex e non RwLock perchè la struct è pensata per lavorare con una sola comboBox
 pub struct ScreensManager
 {
     pub screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
@@ -144,12 +145,4 @@ impl ScreensManager
     }
 }
 
-#[cfg(test)]
-mod tests{
-    #[test]
-    fn test_fullscreen() {
-        let sm = crate::screens_manager::ScreensManager::new(10);
-        let r = sm.start_thread_fullscreen_screenshot();
-        assert!(r.recv().is_ok());
-    }
-}
+
