@@ -4,6 +4,7 @@ use image::{RgbaImage, ImageError};
 use std::{sync::mpsc::{Receiver, channel}, io::stdout, path::PathBuf, ffi::OsStr};
 use std::fs::File;
 use std::io::Write;
+use eframe::emath::Rect;
 
 use crate::DEBUG;
 
@@ -52,6 +53,26 @@ fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error>
     let mut ctx2 = Clipboard::new().unwrap(); //inizializzazione della clipboard per copiare negli appunti
     let img_data = ImageData {width: img.width() as usize, height: img.height() as usize, bytes: std::borrow::Cow::Borrowed(img)};
     ctx2.set_image(img_data) //settare l'immagine come elemento copiato negli appunti  
+}
+
+pub fn start_thread_crop_image(rect: Rect, img: RgbaImage ) -> Receiver<Result<RgbaImage, &'static str>>
+{
+    let (tx, rx) = channel();
+    std::thread::spawn(move||
+    {
+        let _ = tx.send(Ok(crop_image(rect, img)));
+    });
+
+    rx
+}
+
+fn crop_image(rect: Rect, img: RgbaImage) -> RgbaImage
+{
+    image::imageops::crop_imm::<RgbaImage>(&img,
+        rect.left() as u32,
+        rect.top() as u32,
+        rect.width() as u32,
+        rect.height() as u32).to_image()
 }
 
 

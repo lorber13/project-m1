@@ -25,10 +25,10 @@ use std::cell::RefCell;
 use std::fmt::Formatter;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use eframe::egui::{Rect, Context};
+use eframe::egui::Rect;
 use image::{RgbaImage, ImageError};
 use crate::itc::ScreenshotDim;
 use crate::{DEBUG, image_coding, screens_manager};
@@ -42,15 +42,15 @@ use menu::MainMenu;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName};
 use std::io::Write;
 use std::rc::Rc;
-use std::cell::Cell;
 
+/// Possibili valori dello stato interno della macchina a stati realizzata dalla struct <i>GlobalGuiState</i>.
 pub enum EnumGuiState
 {
     MainMenu(MainMenu),
     WaitingForDelay(Option<JoinHandle<()>>,ScreenshotDim),
-    LoadingRectSelection(u64,Option<Receiver<Result<RgbaImage, &'static str>>>),
+    LoadingRectSelection(Receiver<Result<RgbaImage, &'static str>>),
     RectSelection(RectSelection),
-    LoadingEditImage(Option<Receiver<Result<RgbaImage, &'static str>>>),
+    LoadingEditImage(Receiver<Result<RgbaImage, &'static str>>),
     EditImage(EditImage),
     Saving(Receiver<Result<(), ImageError>>)
 }
@@ -72,21 +72,29 @@ impl std::fmt::Debug for EnumGuiState
     }
 }
 
+/// Memorizza lo stato globale della dell'applicazione.
 pub struct GlobalGuiState
 {
+    /// Stato corrente della macchina a stati (quindi, dell'intera applicazione).
     state: EnumGuiState,
+    /// Stato di errore globale dell'applicazione.
     alert: Rc<RefCell<Option<String>>>,
-    save_request: Option<(RgbaImage, ImageFormat)>,
+    /// Gestore degli schermi rilevati dal sistema.
     screens_manager: Arc<screens_manager::ScreensManager>,
+    /// Impostazioni di salvataggio automatico delle immagini.
     save_settings: Rc<RefCell<SaveSettings>>,
+    /// Gestore delle hotkeys registrate e del loro ascolto.
     registered_hotkeys: Arc<RegisteredHotkeys>,
-    clipboard : Option<Receiver<Result<(), arboard::Error>>>, //contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard
+    /// Contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard.
+    clipboard : Option<Receiver<Result<(), arboard::Error>>>, 
 }
 
 
 
 impl GlobalGuiState
 {
+    /// Crea una nuova istanza della macchina a stati, del gestore delle hotkeys e degli schermi.
+    /// Lo stato iniziale è <i>EnumGuiState::MainMenu</i>.
     fn new() -> Self
     {
         let alert: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
@@ -96,7 +104,6 @@ impl GlobalGuiState
         GlobalGuiState {
             state: EnumGuiState::MainMenu(MainMenu::new(alert.clone(), screens_manager.clone(), save_settings.clone(), registered_hotkeys.clone())),
             alert,
-            save_request: None,
             screens_manager,
             save_settings,
             registered_hotkeys,
@@ -105,6 +112,7 @@ impl GlobalGuiState
     }
 
 
+    /// Modifica lo stato della macchina a stati in <i>EnumGuistate::MainMenu</i>, in cui memorizza una nuova istanza di MainMenu.
     fn switch_to_main_menu(&mut self, _frame: &mut eframe::Frame)
     {
         _frame.set_decorations(true);
@@ -115,6 +123,13 @@ impl GlobalGuiState
         self.state = EnumGuiState::MainMenu(MainMenu::new(self.alert.clone(), self.screens_manager.clone(), self.save_settings.clone(), self.registered_hotkeys.clone()));
     }
 
+    /// Esegue il metodo <i>MainMenu::update()</i>, a cui passa enabled = false solo se l'applicazione sta mostrando la finestra di alert.
+    /// In questo modo, fino a quando la finestra di alert non verrà chiusa, i click eseguiti dall'user su MainMenu non avranno effetto.<br>
+    /// Gestisce inoltre il caso in cui <i>MainMenu::update()</i> restituisca <i>MainMenuEvent::ScreenshotRequest</i>, richiamando
+    /// <i>Self::start_wait_delay()</i>.
+    ///  
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::MainMenu</i>.
     fn show_main_menu(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
@@ -128,6 +143,14 @@ impl GlobalGuiState
         }else {unreachable!();}
     }
 
+    /// Data una richiesta di screenshot, se essa include un delay non nullo, rende invisibile l'applicazione e 
+    /// lancia il thread che esegue la sleep relativa.
+    /// 
+    /// 
+    /// Cambia lo stato in <i>EnumGuiState::WaitingForDelay</i>, in cui è memorizzato, assieme all'informazione
+    /// <i>ScreenshotDim</i> una option contenente:
+    /// - None, se il delay associato alla richiesta di screenshot era nullo;
+    /// - altrimenti, il JoinHandle relativo al thread appena lanciato.
     fn start_wait_delay(&mut self, d: f64, area: ScreenshotDim, frame: &mut eframe::Frame,ctx: &eframe::egui::Context) {
         let mut jh=None;
         if d > 0.0
@@ -142,6 +165,14 @@ impl GlobalGuiState
     }
 
 
+    /// Se nello stato corrente è memorizzato un JoinHandle, esegue <i>join()</i>, mettendo di fatto in attesa la gui (che intanto non è visibile) 
+    /// fino a quando lo sleep eseguito dal thread non è terminato. Dopo il <i>join()</i>, rende dinuovo visibile l'applicazione.
+    /// 
+    /// Dopo ciò, richiama un metodo diverso a seconda del tipo di screenshot richiesto:
+    /// - <i>ScreenshotDim::FullScreen</i>
+    /// 
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::WaitingForDelay</i>.
     fn wait_delay(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::WaitingForDelay(opt_jh, area)=&mut self.state
@@ -164,7 +195,7 @@ impl GlobalGuiState
                     self.switch_to_edit_image(None, ctx, frame);
                 }
                 ScreenshotDim::Rectangle => {
-                    self.switch_to_rect_selection(ctx, frame);
+                    self.switch_to_rect_selection(ctx);
                 }
             }
         }
@@ -172,38 +203,35 @@ impl GlobalGuiState
 
 
     /*--------------RECT SELECTION---------------------------------------- */
-
-    fn switch_to_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
+    /// Cambia lo stato della macchina a stati in <i>EnumGuiState::LoadingRectSelection</i>.<br>
+    /// Lancia un thread worker per produrre lo screenshot che verrà ritagliato da RectSelection, memorizzando 
+    /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread nello stato corrente.
+    /// 
+    fn switch_to_rect_selection(&mut self, ctx: &eframe::egui::Context)
     {
-        frame.set_visible(false);
-        ctx.request_repaint();
         if DEBUG { println!("nframe (switch to rect selection): {}", ctx.frame_nr()); }
-        self.state = EnumGuiState::LoadingRectSelection(ctx.frame_nr(), None);
+        self.state = EnumGuiState::LoadingRectSelection(self.screens_manager.start_thread_fullscreen_screenshot());
     }
+
+    /// Esegue <i>Receiver::try_recv()</i> per controllare se il thread worker ha prodotto lo screenshot:
+    /// - Se il canale contiene <i>Ok(RgbaImage)</i>, cambia lo stato corrente in <i>EnumGuiState::RectSelection</i>;
+    /// - Se il canale contiene <i>Err(&'static str)</i> o se il canale è stato chiuso, scrive l'errore nello stato 
+    ///     globale dell'applicazione;
+    /// - Se il canale è ancora vuoto, richiede un nuovo refresh della gui.
+    /// 
+    /// <i>NOTA: Si è scelta una soluzione con busy wait per evitare che il main thread rimanga in attesa bloccante di 
+    /// un altro thread, la cui computazione può potenzialmente fallire.</i>
+    /// 
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::LoadingRectSelection</i>.
     fn load_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         match &mut self.state
         {
-            EnumGuiState::LoadingRectSelection(nf, None) => //il thread non è ancora stato spawnato
+            EnumGuiState::LoadingRectSelection(r) => 
             {
-                if (*nf+13) <= ctx.frame_nr()
-                {
-                    if DEBUG {println!("nframe (load rect selection): {}", ctx.frame_nr());}
-                    let rx = self.screens_manager.start_thread_fullscreen_screenshot();
-                    self.state = EnumGuiState::LoadingRectSelection(*nf, Some(rx));
-                    ctx.request_repaint();
-                }else {
-                    ctx.request_repaint();
-                }
-                
-            },
-
-            EnumGuiState::LoadingRectSelection(_, Some(r)) => //in attesa che il thread invii l'immmagine
-            {
-                //se sono in stato di attesa, controllo se il thread worker ha inviato sul canale
                 match r.try_recv()
                 {
-                    //se un messaggio è stato ricevuto, interrompo lo stato di attesa e visualizzo la prossima schermata
                     Ok(msg) =>
                     {
                         ctx.request_repaint();
@@ -236,7 +264,11 @@ impl GlobalGuiState
         
     }
 
-
+    /// Richiama <i>RectSelection::update</i> e ne gestisce il valore di ritorno nel caso questo sia <i>Some((Rect, RgbaImage))</i>,
+    /// passando i due parametri al metodo <i>Self::switch_to_edit_image()</i>.
+    ///  
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::RectSelection</i>.
     fn show_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::RectSelection(ref mut rs) = self.state
@@ -254,58 +286,46 @@ impl GlobalGuiState
 
     /*---------------------------EDIT IMAGE---------------------------------------------------- */
 
-    ///se opt_rect_img == Some(..),
-    ///uso il rettangolo per ritagliare l'immagine precedentemente salvata
-    ///un thread worker esegue il task, mentre la gui mostrerà la schermata di caricamento
-    /// altrimenti,
-    /// avvio un thread worker che eseguirà lo screenshot fullscreen
+    /// A seconda del valore del parametro <b>opt_rect_img</b> si comporta in modo diverso:
+    /// - <i>Some((Rect, RgbaImage))</i>: 
+    ///     avvia il thread che esegue il ritaglio dell'immagine, salva l'estremità ricevente del canale di comunicazione con 
+    ///     il thread all'interno dello stato;
+    /// - <i>None</i>: 
+    ///     avvia il thread che esegue lo screenshot fullscreen, salva l'estremità ricevente del canale di comunicazione con 
+    ///     il thread all'interno dello stato.
+    /// In entrambi i casi, il prossimo stato della macchina a stati sarà <i>EnumGuiState::LoadingEditImage.
     fn switch_to_edit_image(&mut self, opt_rect_img: Option<(Rect, RgbaImage)>, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let Some((rect, img)) = opt_rect_img
         {
-            let (tx, rx) = channel();
-            thread::spawn(move||
-                {
-                    let crop_img = Ok(image::imageops::crop_imm::<RgbaImage>(&img,
-                                                                                rect.left() as u32,
-                                                                                rect.top() as u32,
-                                                                                rect.width() as u32,
-                                                                                rect.height() as u32).to_image());
-
-
-                    let _ = tx.send(crop_img);
-                });
-            self.state = EnumGuiState::LoadingEditImage(Some(rx));
+            self.state = EnumGuiState::LoadingEditImage(image_coding::start_thread_crop_image(rect, img));
         }else
         {
             frame.set_visible(false);
             ctx.request_repaint();
-            self.state = EnumGuiState::LoadingEditImage(None);
+            self.state = EnumGuiState::LoadingEditImage(self.screens_manager.start_thread_fullscreen_screenshot());
         }
-        
-        // passo nello stadio di attesa dell'immagine ritagliata (non sono ancora dentro editImage)
-        
     }
 
-    //pub fn switch_to_none(&mut self)
-    //{
-    //    let mut cv = ARefCell::new((Condvar::new(), Mutex::new(false)));
-    //    let mut guard = self.state.lock().unwrap();
-    //    *guard = EnumGuiState::None(cv.clone());
-    //    drop(guard);
-    //    cv.0.wait_while(cv.1.lock().unwrap(), |sig| !*sig);
-    //}
-
-
+    /// Richiama <i>Receiver::try_recv()</i> sul receiver memorizzato nello stato corrente:
+    /// - Se la <i>recv()</i> ha successo:
+    ///     1. avvia il thread per copiare nella clipboard l'immagine ricevuta tramite il canale;
+    ///     2. richiama EditImage::new(), a cui passa l'immagine ricevuta tramite il canale;
+    ///     3. cambia lo stato corrente in <i>EnumGuistate::EditImage</i>, in cui memorizza a nuova istanza di <i>EditImage</i>.
+    /// - Se il canale è vuoto, mostra uno spinner;
+    /// - Se il canale è stato chiuso inaspettatamente, scrive un messaggio di errore nello stato di errore globale.
+    /// 
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::LoadingEditImage</i>.
     fn load_edit_image(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
-        if let EnumGuiState::LoadingEditImage(Some(r)) = &mut self.state //attesa dell'immagine da caricare
+        if let EnumGuiState::LoadingEditImage(r) = &mut self.state //attesa dell'immagine da caricare
         {
             match r.try_recv()
             {
                 Ok(Ok(img)) => {
                     
-                    self.clipboard =Some(start_thread_copy_to_clipboard(&img));
+                    if self.save_settings.borrow().copy_on_clipboard {self.clipboard =Some(start_thread_copy_to_clipboard(&img));}
 
                     let em = EditImage::new(img, ctx);
                     frame.set_fullscreen(false);
@@ -315,15 +335,18 @@ impl GlobalGuiState
                 Err(TryRecvError::Empty) => {show_loading(ctx);},
                 Err(TryRecvError::Disconnected) | Ok(Err(_)) => {self.alert.borrow_mut().replace("Unable to load the image. please retry".to_string()); self.switch_to_main_menu(frame);}
             }
-        }else if let EnumGuiState::LoadingEditImage(None) = &mut self.state
-        {
-            let rx = self.screens_manager.start_thread_fullscreen_screenshot();
-            self.state = EnumGuiState::LoadingEditImage(Some(rx));
         }else {unreachable!();}
     }
 
 
-
+    /// Richiama <i>EditImage::update()</i> e ne gestisce il valore di ritorno:
+    /// - <i>EditImageEvent::Saved</i>: avvia la procedura di salvataggio dell'immagine ritornata dal metodo (che è quindi uno screenshot, con eventuali
+    ///     annotazioni) nel formato corrispondente all'oggetto <i>ImageFormat</i> ritornato dal metodo;
+    /// - <i>EditImageEvent::Aborted</i>: ritorna alla schermata principale eliminando tutti i progressi;
+    /// - <i>EditImageEvent::Nil</i>: non è necessaria alcuna azione.
+    /// 
+    /// <h3>Panics:</h3>
+    /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::EditImage</i>.
     fn show_edit_image(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::EditImage(em) = &mut self.state
@@ -331,12 +354,9 @@ impl GlobalGuiState
             let enabled = self.alert.borrow().is_none();
             match em.update(ctx, frame, enabled)
             {
-                // todo: manage different formats
                 EditImageEvent::Saved {image, format} => 
                 {
-                    self.save_request = Some((image, format));
-
-                    self.manage_save_request();
+                    self.manage_save_request(image, format);
                 },
                 EditImageEvent::Aborted => { self.switch_to_main_menu(frame)},
                 EditImageEvent::Nil => ()
@@ -345,7 +365,23 @@ impl GlobalGuiState
         }else {unreachable!();}
     }
 
-    fn manage_save_request(&mut self)
+    /// Controlla quali sono le impostazioni di salvataggio di default attualmente in uso. Sia la directory di default che il 
+    /// nome di default possono essere abilitati o disabilitati, quindi esistono quattro possibili casistiche:<br>
+    /// 
+    /// (default_dir, default_name) = 
+    /// - <i>(Some(..), Some(..))</i>: non è necessario mostrare all'user nessun file dialog perchè il path di salvataggio è
+    ///     già conosciuto;
+    /// - <i>(None, Some(..))</i>: viene mostrato un directory dialog;
+    /// - <i>(Some(..), None)</i>: viene mostrato un file dialog che di default apre la default_dir, ma potenzialmente l'user
+    ///     potrebbe modificare a piacere la cartella di salvataggio in questa fase;
+    /// - <i>(None, None)</i>: viene mostrato un file dialog che di default apre la cartella root.
+    /// 
+    /// Se l'user conferma l'operazione di selezione tramite file dialog, oppure se si è presentata la prima situazione sopra
+    /// descritta, il metodo avvia il thread che realizza il salvataggio al path ottenuto. Poi, memorizza nello stato corrente
+    /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread. Lo stato cambia quindi in <i>EnumGuiState::Saving</i>.<br>
+    /// 
+    /// Se l'user annulla l'operazione di selezione tramite file dialog, la gui continua a mostrare la schermata EditImage.
+    fn manage_save_request(&mut self, image: RgbaImage, format: ImageFormat)
     {
         let ss = self.save_settings.borrow().clone();
         match (ss.get_default_dir(), ss.get_default_name())
@@ -353,9 +389,8 @@ impl GlobalGuiState
             (Some(dp), Some(dn)) => 
             {
                 let pb = PathBuf::from(dp);
-                let fr = self.save_request.take().unwrap();
-                let ext: &str = fr.1.into();
-                self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(pb, dn,String::from(ext), fr.0 ));
+                let ext: &str = format.into();
+                self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(pb, dn,String::from(ext), image ));
             }
 
             (None, Some(dn)) =>
@@ -365,33 +400,30 @@ impl GlobalGuiState
                 {
                     if DEBUG {let _ =writeln!(std::io::stdout(), "DEBUG: dir picker return = {}", dir.display());}
 
-                    let fr = self.save_request.take().unwrap();
-                    let ext: &str = fr.1.into();
-                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, dn,String::from(ext), fr.0 ));
+                    let ext: &str = format.into();
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, dn,String::from(ext), image ));
                 }
             },
 
             (Some(dp), None) =>
             {
-                let fr = self.save_request.take().unwrap();
-                let dir_opt = file_dialog::show_save_dialog(&fr.1, Some(&dp.to_string()));
+                let dir_opt = file_dialog::show_save_dialog(&format, Some(&dp.to_string()));
                 if let Some(dir) = dir_opt
                 {
-                    let ext: &str = fr.1.into();
+                    let ext: &str = format.into();
                     let file_name = String::from(dir.file_name().unwrap().to_str().unwrap());
-                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), fr.0 ));
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), image ));
                 }
             },
 
             (None, None) =>
             {
-                let fr = self.save_request.take().unwrap();
-                let dir_opt = file_dialog::show_save_dialog(&fr.1, None);
+                let dir_opt = file_dialog::show_save_dialog(&format, None);
                 if let Some(dir) = dir_opt
                 {
-                    let ext: &str = fr.1.into();
+                    let ext: &str = format.into();
                     let file_name = String::from(dir.file_name().unwrap().to_str().unwrap());
-                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), fr.0 ));
+                    self.state = EnumGuiState::Saving(image_coding::start_thread_save_image(dir, file_name,String::from(ext), image ));
                 }
             }
         }
@@ -401,6 +433,15 @@ impl GlobalGuiState
 
 
     //----------------------SAVING --------------------------------------------------
+    /// Esegue busy waiting sul canale di comunicazione con il thread worker iterando la chiamata al metodo <i>Receiver::try_recv()</i>:
+    /// - Fino a quando non compare un messaggio nel canale mostra uno spinner;
+    /// - Se il canale viene chiuso inaspettatamente o se nel canale compare un oggetto <i>Err()</i>, scrive un messaggio nello stato di 
+    ///     errore globale dell'applicazione;
+    /// - Se nel canale compare un oggetto Ok(), mostra un alert con un messaggio di conferma e riporta l'applicazione nella schermata
+    ///     di partenza.
+    /// 
+    /// <h3>Panics:</h3>
+    /// Nel caso in cui <i>self.state</i> sia diverso da <i>EnumGuiState::Saving</i>.
     fn show_saving(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         if let EnumGuiState::Saving(rx) = &mut self.state
@@ -418,28 +459,32 @@ impl GlobalGuiState
         }else {unreachable!();}
     }
 
-
+    /// Esegue l'azione relativa alla hotkey <b>hn</b>.
     fn hotkey_reaction(&mut self, hn: HotkeyName, ctx: &eframe::egui::Context, frame: &mut eframe::Frame)
     {
         match hn
         {
             HotkeyName::FullscreenScreenshot => self.switch_to_edit_image(None, ctx, frame),
-            HotkeyName::RectScreenshot => self.switch_to_rect_selection(ctx, frame)
+            HotkeyName::RectScreenshot => self.switch_to_rect_selection(ctx)
         }
     }
 
+    /// Esegue busy waiting sul canale di comunicazione con il thread worker che sta copiando l'immagine nella clipboard.<br>
+    /// Gestisce la ricezione sul canale sia di un messaggio di conferma che di un messaggio di errore, comunicando all'user
+    /// l'esito dell'operazione.
+    /// Mostra errore nel caso il canale venga chiuso inaspettatamente.
     fn manage_clipboard(&mut self)
     {
         if let Some(rx) = &self.clipboard
         {
             match rx.try_recv()
             {
-                Ok(_) =>{ self.alert.borrow_mut().replace("Image copied to clipboard".to_string()); self.clipboard = None; },
-                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Error: impossible to copy the image on the clipboard".to_string()); },
+                Ok(Ok(_)) =>{ self.clipboard = None; },
+                Ok(Err(e)) => {self.alert.borrow_mut().replace(format!("Error: impossible to copy the image on the clipboard ({})", e)); self.clipboard = None;}
+                Err(TryRecvError::Disconnected) => {self.alert.borrow_mut().replace("Error: impossible to copy the image on the clipboard".to_string()); self.clipboard = None;},
                 Err(TryRecvError::Empty) => ()
             }
-        }else {unreachable!();}
-        
+        }
     }
     
 }
@@ -459,6 +504,14 @@ pub fn launch_gui()
 
 impl eframe::App for GlobalGuiState
 {
+    /// Attiva di default l'ascolto della pressione delle hotkeys: potrà essere eventualmente disattivato dai metodi che verranno 
+    /// richiamati successivamente da questo metodo. Si è scelto questo approccio perchè sono poche le casistiche in cui l'ascolto 
+    /// debba essere disattivato.<br>
+    /// Controlla se ci sono eventuali thread worker che stanno facendo operazioni sulla clipboard da gestire.<br>
+    /// A seconda dello stato corrente (una delle varianti di <i>EnumGlobalGuiState</i>) esegue una diversa operazione (eseguendo un match case).<br>
+    /// Solo se attualmente non è mostrato nessun alert, controlla se nell'input di questo frame c'è la pressione di una hotkey:
+    /// in caso positivo, la gestisce.
+    /// Se invece lo stato di errore globale non è vuoto, mostra un alert con il messaggio che descrive tale errore.
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) 
     {
         //if crate::DEBUG {print!("gui refresh. ");}
@@ -466,10 +519,7 @@ impl eframe::App for GlobalGuiState
         self.registered_hotkeys.set_listen_enabled(true); //abilito di default l'ascolto delle hotkeys (potrà essere disabilitato dalle funzioni chiamate nei rami del match)
 
         //gestione di eventuali operazioni sulla clipboard
-        if let Some(_) = &mut self.clipboard
-        {
-            self.manage_clipboard();
-        }
+        self.manage_clipboard();
 
         //if crate::DEBUG {println!("state = {:?}", self.state);}
 
