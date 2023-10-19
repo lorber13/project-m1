@@ -1,4 +1,4 @@
-use crate::{image_coding, DEBUG};
+
 
 use crate::gui::edit_image::obscure_screen;
 use eframe::egui;
@@ -6,6 +6,16 @@ use eframe::egui::{Context, CursorIcon, TextureHandle};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Vec2};
 use image::RgbaImage;
 
+/// Struct che memorizza lo stato del componente della gui che mette a disposizione un'interfaccia per limitare lo screenshot
+/// ad un'area rettangolare attraverso operazione di drag & drop.<br>
+/// Di fatto, l'operazione corrisponde al ritaglio di uno screenshot precedentemente acquisito. Questo screenshot virne acquisito 
+/// nel momento della pressione sul bottone "Acquire", doopodichè viene messo come
+/// sfondo del frame mostrato a dimensione fullscreen.<br>
+/// Per questo motivo, nella struct sono la stessa immagine è memorizzata in due forme diverse:
+/// - La <i>TextureHandle</i> viene usata per mostrare tale immagine come sfondo;
+/// - La <i>RgbaImage</i> sarà ritagliata per produrre l'output.<br>
+/// 
+/// La struct memorizza inoltre, al suo interno, se e da quale punto è stata avviata un'operazione di drag.
 pub struct RectSelection {
     texture_handle: TextureHandle,
     start_drag_point: Option<Pos2>,
@@ -13,10 +23,9 @@ pub struct RectSelection {
 }
 
 impl RectSelection {
+
+    /// Esegue <i>Context::load_texture()</i> per poter impostare l'immagine come sfondo.
     pub fn new(rgba: RgbaImage, ctx: &Context) -> Self {
-        if DEBUG {
-            let _ = image_coding::start_thread_copy_to_clipboard(&rgba);
-        }
 
         RectSelection {
             texture_handle: ctx.load_texture(
@@ -32,10 +41,21 @@ impl RectSelection {
         }
     }
 
+    /// Mostra una finestra full screen e senza barra di controllo, all'interno della quale viene allocato un oggetto painter 
+    /// sensibile alle operazioni di click e drag.
+    /// LO sfondo di tale componente è lo screenshot fullscreen passato al costruttore di questa istanza, oscurato con un filtro.
+    /// 
+    /// Se viene rilevato click, il punto in cui esso è avvenuto viene memorizzato in <i>self.start_drag_point</i>.<br>
+    /// Fino a quando il drag è in corso, utilizzando il painter viene disegnato un rettangolo a partire dai due seguenti vertici:
+    /// - <i>self.start_drag_point</i>;
+    /// - <i>response.on_hover_pos()</i> (dove <i>response</i> è l'oggetto <i>Response</i> ritornato in seguito all'allocazione del painter).
+    /// 
+    /// Quando viene rilasciato il drag, il rettangolo correntemente disegnato viene salvato per poter essere ritornato dal metodo.<br>
+    /// Prima del rilascio del drag, il metodo ritorna <i>None</i>.
     pub fn update(&mut self, ctx: &Context) -> Option<(Rect, RgbaImage)> {
         let mut ret = None;
 
-        egui::Area::new("area_1").show(ctx, |ui| {
+        egui::Area::new("").show(ctx, |ui| {
             let (response, painter) = ui.allocate_painter(
                 Vec2::new(ctx.screen_rect().width(), ctx.screen_rect().height()),
                 Sense::click_and_drag(),

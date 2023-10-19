@@ -1,4 +1,4 @@
-use eframe::egui::{Ui, Event, Context, ScrollArea};
+use eframe::egui::{Ui, Event, ScrollArea};
 
 use crate::itc::SettingsEvent;
 use crate::hotkeys::{RegisteredHotkeys, HotkeyName, self};
@@ -29,6 +29,8 @@ impl PartialEq for HotkeySettingsState
 }
 
 /// Stato della parte della gui che visualizza la schermata di impostazione delle Hotkeys.<br>
+/// Si appoggia sul modulo RegisteredHotkeys: questa struct realizza la parte di gui per settare le hotkeys,
+/// registrando le modifiche attraverso RegisteredHotkeys.
 #[derive(Clone)]
 pub struct HotkeysSettings
 {
@@ -65,7 +67,7 @@ impl HotkeysSettings
     /// -   SettingsEvent::Save, se è stato premuto il bottone "Save";
     /// -   SettingsEvent::Abort, se è stato premuto il bottone "Abort";
     /// -   SettingsEvent::Nil altrimenti.
-    pub fn update(&mut self, ui: &mut Ui, ctx: &Context)  -> SettingsEvent
+    pub fn update(&mut self, ui: &mut Ui)  -> SettingsEvent
     {
         let mut ret = SettingsEvent::Nil;
 
@@ -121,6 +123,8 @@ impl HotkeysSettings
                                 }
                             });
                             if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
+                            ui.add_space(10.0);
+                            ui.heading("❓").on_hover_text("Hotkeys are combinations of keys pressed simultaneously with an associated action.\nThese combinations must be composed by at least one control button and only one key button.\nIf you press one of such hotkeys, the associated action is executed, even if this application is not in focus.\nRemember that these will eventually override other system's hotkeys (such as Ctrl+C) if you select the same combination of keys.")
                         });
     
                     //messaggio di help che viene visualizzato mentre si sta registrando una hotkey
