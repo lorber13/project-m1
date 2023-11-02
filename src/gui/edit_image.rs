@@ -1,8 +1,9 @@
 // DISCLAIMER: THIS CODE IS MESSY, I KNOW. I STILL HAVE TO MODULARIZE IT
 use crate::image_coding::ImageFormat;
+use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
-    pos2, stroke_ui, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
-    Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui, Vec2,
+    color_picker, pos2, vec2, CentralPanel, Color32, ColorImage, Context, DragValue, Painter, Pos2,
+    Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, Ui, Vec2,
 };
 use eframe::egui::{ComboBox, CursorIcon};
 use eframe::emath::Rot2;
@@ -101,7 +102,7 @@ impl EditImage {
             scale_ratio: Default::default(),
             stroke: Stroke {
                 width: 1.0,
-                color: Color32::GREEN.gamma_multiply(0.5),
+                color: Color32::GREEN,
             },
             fill_shape: false,
         }
@@ -166,6 +167,7 @@ impl EditImage {
                             scaled_point(painter.clip_rect().left_top(), self.scale_ratio, *point);
                     }
                 }
+                // todo: set description of reachability
                 _ => unreachable!(),
             }
         }
@@ -319,6 +321,7 @@ impl EditImage {
                                 start_drag.expect("if we are here start_drag should be defined");
                             let b = end_drag.expect("the previous assertion");
                             if self.fill_shape {
+                                // todo: there is a bug in the width that seems to not be positive.
                                 painter.rect_filled(
                                     Rect::from_two_pos(a, b),
                                     Rounding::none(),
@@ -790,12 +793,16 @@ impl EditImage {
             }
             match (&self.current_tool, self.fill_shape) {
                 (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
-                    ui.color_edit_button_srgba(&mut self.stroke.color);
+                    color_picker::color_edit_button_srgba(
+                        ui,
+                        &mut self.stroke.color,
+                        Alpha::Opaque,
+                    );
                 }
                 (Tool::Rect { .. } | Tool::Circle { .. }, false)
                 | (Tool::Pen { .. }, _)
                 | (Tool::Arrow { .. }, _) => {
-                    stroke_ui(ui, &mut self.stroke, "Stroke");
+                    stroke_ui_opaque(ui, &mut self.stroke, "Stroke");
                 }
                 (Tool::Cut { .. }, _) => {}
             }
@@ -983,4 +990,20 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
         Color32::from_black_alpha(200),
     );
     painter.rect_stroke(except_rectangle, Rounding::none(), stroke);
+}
+
+pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke, text: &str) {
+    let Stroke { width, color } = stroke;
+    ui.horizontal(|ui| {
+        ui.add(DragValue::new(width).speed(0.1).clamp_range(0.0..=5.0))
+            .on_hover_text("Width");
+        color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
+        ui.label(text);
+
+        // stroke preview:
+        let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
+        let left = stroke_rect.left_center();
+        let right = stroke_rect.right_center();
+        ui.painter().line_segment([left, right], (*width, *color));
+    });
 }
