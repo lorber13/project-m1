@@ -2,8 +2,11 @@
 La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
 mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState.
+
 La gui è quindi intesa come macchina a stati e le varianti della EnumGuiState incapsulano le variabili con i dettagli di ciascuno stato. 
 In particolare, se una variante incapsula un Receiver, allora la gui è in uno stato di attesa: viene fatto busy waiting con tryRecv(). Si noti che il design della sincronizzazione con altri thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento del crate eframe.
+
+Lo stato della gui è incapsulato dentro la struct <i>GlobalGuiState</i> assieme ad altre informazioni globali.
  */
 
 
