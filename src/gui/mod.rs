@@ -258,7 +258,10 @@ impl GlobalGuiState {
                     );
                     self.switch_to_main_menu(frame);
                 }
-                Err(TryRecvError::Empty) => ctx.request_repaint(),
+                Err(TryRecvError::Empty) => {
+                    frame.set_visible(false); // necessario per la scomparsa della finestra
+                    ctx.request_repaint();
+                },
             },
 
             _ => unreachable!(),
@@ -272,8 +275,9 @@ impl GlobalGuiState {
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::RectSelection</i>.
     fn show_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::RectSelection(ref mut rs) = self.state {
-            ctx.request_repaint(); //per evitare il bug durante la transizione
+           ctx.request_repaint(); //per evitare il bug durante la transizione
             if let Some((rect, rgba)) = rs.update(ctx) {
+                frame.set_visible(true);
                 self.switch_to_edit_image(Some((rect, rgba)), ctx, frame);
             }
         } else {

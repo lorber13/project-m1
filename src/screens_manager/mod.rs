@@ -82,6 +82,7 @@ impl ScreensManager {
         let (tx, rx) = channel();
         let sc = self.clone();
         std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs_f64(0.25));
             tx.send(sc.fullscreen_screenshot()).expect(
                 "thread performing fullscreen screenshot was not able to send throught the channel",
             );
