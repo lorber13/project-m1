@@ -22,7 +22,7 @@ mod save_settings;
 use self::edit_image::EditImageEvent;
 use self::menu::MainMenuEvent;
 use crate::gui::loading::show_loading;
-use crate::hotkeys::{HotkeyName, RegisteredHotkeys};
+use crate::hotkeys::{self, HotkeyName, RegisteredHotkeys};
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use crate::{image_coding, screens_manager, DEBUG};
@@ -37,7 +37,7 @@ use std::fmt::Formatter;
 use std::io::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -83,6 +83,8 @@ pub struct GlobalGuiState {
     registered_hotkeys: Arc<RegisteredHotkeys>,
     /// Contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard.
     clipboard: Option<Receiver<Result<(), arboard::Error>>>,
+
+    hotkey_receiver: Option<Receiver<HotkeyName>>,
 }
 
 impl GlobalGuiState {
@@ -105,6 +107,7 @@ impl GlobalGuiState {
             save_settings,
             registered_hotkeys,
             clipboard: None,
+            hotkey_receiver: None,
         }
     }
 
@@ -231,7 +234,6 @@ impl GlobalGuiState {
         match &mut self.state {
             EnumGuiState::LoadingRectSelection(r) => match r.try_recv() {
                 Ok(msg) => {
-                    ctx.request_repaint();
                     frame.set_visible(true);
                     frame.set_fullscreen(true);
                     match msg {
@@ -270,6 +272,7 @@ impl GlobalGuiState {
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::RectSelection</i>.
     fn show_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::RectSelection(ref mut rs) = self.state {
+            ctx.request_repaint(); //per evitare il bug durante la transizione
             if let Some((rect, rgba)) = rs.update(ctx) {
                 self.switch_to_edit_image(Some((rect, rgba)), ctx, frame);
             }
@@ -487,7 +490,10 @@ impl GlobalGuiState {
         ctx: &eframe::egui::Context,
         frame: &mut eframe::Frame,
     ) {
-        if DEBUG {println!("hotkey_reaction");}
+        if DEBUG {
+            println!("hotkey_reaction");
+        }
+        frame.focus();
         match hn {
             HotkeyName::FullscreenScreenshot => self.switch_to_edit_image(None, ctx, frame),
             HotkeyName::RectScreenshot => self.switch_to_rect_selection(ctx),
@@ -528,9 +534,7 @@ pub fn launch_gui() {
     eframe::run_native(
         "Simple screenshot App",
         options,
-        Box::new(|_cc| {
-            Box::new(GlobalGuiState::new())
-        }),
+        Box::new(|_cc| Box::new(GlobalGuiState::new())),
     )
     .unwrap();
 }
@@ -547,12 +551,25 @@ impl eframe::App for GlobalGuiState {
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         //if crate::DEBUG {print!("gui refresh. ");}
 
+        //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys
+        if self.hotkey_receiver.is_none() {
+            let (tx, rx) = channel();
+            self.hotkey_receiver = Some(rx);
+            hotkeys::start_thread_listen_hotkeys(
+                Arc::new(ctx.clone()),
+                self.registered_hotkeys.clone(),
+                tx,
+            );
+        }
+
         self.registered_hotkeys.set_listen_enabled(true); //abilito di default l'ascolto delle hotkeys (potrà essere disabilitato dalle funzioni chiamate nei rami del match)
 
         //gestione di eventuali operazioni sulla clipboard
         self.manage_clipboard();
 
-        //if crate::DEBUG {println!("state = {:?}", self.state);}
+        if crate::DEBUG {
+            println!("state = {:?}", self.state);
+        }
 
         match &mut self.state {
             EnumGuiState::MainMenu(..) => {
@@ -578,18 +595,25 @@ impl eframe::App for GlobalGuiState {
             }
         }
 
-        
         //ascolto di hotkeys
         if self.alert.borrow().is_none() {
-            match self.registered_hotkeys.listen_hotkeys() {
-                None => (),
-                Some(hn) => self.hotkey_reaction(hn, ctx, frame),
+            if let Some(hr) = &self.hotkey_receiver {
+                match hr.try_recv() {
+                    Ok(hn) => self.hotkey_reaction(hn, ctx, frame),
+                    Err(TryRecvError::Empty) => (),
+                    Err(TryRecvError::Disconnected) => {
+                        self.alert
+                            .borrow_mut()
+                            .replace("Error in hotkeys. Temporarly unavailable".to_string());
+                        self.hotkey_receiver = None;
+                    }
+                }
             }
         } else {
             //segnalazione eventuali errori
             error_alert::show_error_alert(ctx, &mut self.alert.borrow_mut());
         }
 
-        ctx.request_repaint();
+        //ctx.request_repaint();
     }
 }

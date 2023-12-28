@@ -290,27 +290,6 @@ impl RegisteredHotkeys {
         ))
     }
 
-    pub fn listen_hotkeys(self: &Arc<Self>) -> Option<HotkeyName> {
-        if !*self.listen_enabled.read().unwrap() {
-            return None;
-        }
-
-        if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
-            for (i, opt) in self.backup.iter().enumerate() {
-                match opt.read().unwrap().clone() {
-                    None => (),
-                    Some((h, _)) => {
-                        if h.id() == event.id {
-                            return Some(HotkeyName::from(i));
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     pub fn get_hotkey_string(self: &Arc<Self>, name: HotkeyName) -> Option<String> {
         self.vec
             .get(<HotkeyName as Into<usize>>::into(name))
@@ -324,4 +303,29 @@ impl RegisteredHotkeys {
     pub fn set_listen_enabled(&self, val: bool) {
         *self.listen_enabled.write().unwrap() = val;
     }
+}
+
+pub fn start_thread_listen_hotkeys(
+    arc_ctx: Arc<Context>,
+    arc_registered_hotkeys: Arc<RegisteredHotkeys>,
+    main_thr_channel: Sender<HotkeyName>,
+) {
+    std::thread::spawn(move || loop {
+        if let Ok(event) = GlobalHotKeyEvent::receiver().recv() {
+            for (i, opt) in arc_registered_hotkeys.backup.iter().enumerate() {
+                match opt.read().unwrap().clone() {
+                    None => (),
+                    Some((h, _)) => {
+                        if h.id() == event.id {
+                            main_thr_channel.send(HotkeyName::from(i)).unwrap();
+                            if DEBUG {
+                                println!("hotkey event received");
+                            }
+                            arc_ctx.request_repaint();
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
