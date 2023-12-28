@@ -12,8 +12,9 @@ use image::imageops::crop_imm;
 use image::{Rgba, RgbaImage};
 use imageproc::drawing::{
     draw_filled_circle_mut, draw_filled_rect_mut, draw_hollow_circle_mut, draw_hollow_rect_mut,
-    draw_line_segment_mut, Blend,
+    draw_polygon_mut, Blend,
 };
+use imageproc::point::Point;
 use std::ops::Sub;
 
 pub enum EditImageEvent {
@@ -802,7 +803,7 @@ impl EditImage {
                 (Tool::Rect { .. } | Tool::Circle { .. }, false)
                 | (Tool::Pen { .. }, _)
                 | (Tool::Arrow { .. }, _) => {
-                    stroke_ui_opaque(ui, &mut self.stroke, "Stroke");
+                    stroke_ui_opaque(ui, &mut self.stroke);
                 }
                 (Tool::Cut { .. }, _) => {}
             }
@@ -855,18 +856,23 @@ impl EditImage {
                                 .iter()
                                 .zip(path_shape.points.iter().skip(1))
                             {
-                                draw_line_segment_mut(
-                                    &mut self.image_blend,
-                                    (segment.0.x, segment.0.y),
-                                    (segment.1.x, segment.1.y),
-                                    Rgba(path_shape.stroke.color.to_array()),
-                                )
+                                let polygon_points = line_width_to_polygon(
+                                    &[*segment.0, *segment.1],
+                                    path_shape.stroke.width / 2.0,
+                                );
+                                if !(polygon_points[0] == polygon_points[polygon_points.len() - 1])
+                                {
+                                    draw_polygon_mut(
+                                        &mut self.image_blend,
+                                        &polygon_points,
+                                        Rgba(path_shape.stroke.color.to_array()),
+                                    )
+                                }
                             }
                         }
-                        Shape::LineSegment { points, stroke } => draw_line_segment_mut(
+                        Shape::LineSegment { points, stroke } => draw_polygon_mut(
                             &mut self.image_blend,
-                            (points[0].x, points[0].y),
-                            (points[1].x, points[1].y),
+                            &line_width_to_polygon(points, stroke.width / 2.0),
                             Rgba(stroke.color.to_array()),
                         ),
                         Shape::Circle(circle_shape) => {
@@ -934,6 +940,24 @@ fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
     )
 }
 
+fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] {
+    // todo: can I obtain this without using sqrt?
+    let x1 = points[0].x;
+    let x2 = points[1].x;
+    let y1 = points[0].y;
+    let y2 = points[1].y;
+
+    let segment_length = ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)).sqrt();
+    let delta_x = width * (y2 - y1) / segment_length;
+    let delta_y = width * (x2 - x1) / segment_length;
+    let point1 = Point::new((x1 + delta_x) as i32, (y1 - delta_y) as i32);
+    let point2 = Point::new((x1 - delta_x) as i32, (y1 + delta_y) as i32);
+    let point3 = Point::new((x2 - delta_x) as i32, (y2 + delta_y) as i32);
+    let point4 = Point::new((x2 + delta_x) as i32, (y2 - delta_y) as i32);
+
+    [point1, point2, point3, point4]
+}
+
 fn make_rect_legal(rect: &mut Rect) {
     let width = rect.width();
     let height = rect.height();
@@ -992,18 +1016,20 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
     painter.rect_stroke(except_rectangle, Rounding::none(), stroke);
 }
 
-pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke, text: &str) {
+pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { width, color } = stroke;
     ui.horizontal(|ui| {
-        ui.add(DragValue::new(width).speed(0.1).clamp_range(0.0..=5.0))
-            .on_hover_text("Width");
+        ui.label("Color");
         color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
-        ui.label(text);
 
+        ui.label("Width");
+        ui.add(DragValue::new(width).speed(0.1).clamp_range(1.0..=5.0))
+            .on_hover_text("Width");
         // stroke preview:
         let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
-        let left = stroke_rect.left_center();
-        let right = stroke_rect.right_center();
-        ui.painter().line_segment([left, right], (*width, *color));
+        ui.painter().line_segment(
+            [stroke_rect.left_center(), stroke_rect.right_center()],
+            (*width, *color),
+        );
     });
 }
