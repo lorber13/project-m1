@@ -197,20 +197,16 @@ impl HotkeysSettings
         let events = ui.input(|i| {i.events.clone()});
         for event in &events
         {
-            match event
+            //la prima lettera premuta termina il processo di registrazione della hotkey
+            if let Event::Key{key, pressed: _ , modifiers, repeat}  = event  
             {
-                //la prima lettera premuta termina il processo di registrazione della hotkey
-                Event::Key{key, pressed: _ , modifiers, repeat}  =>  
+                if modifiers.any() && !(*repeat)
                 {
-                      if modifiers.any() && *repeat == false
-                      {
-                        ret = Some(KeyboardShortcut::new(modifiers.clone(), key.clone()));
-                      }else {
-                          self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
-                          self.state = HotkeySettingsState::Idle;
-                      }
+                    ret = Some(KeyboardShortcut::new(*modifiers, *key));
+                }else {
+                    self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
+                    self.state = HotkeySettingsState::Idle;
                 }
-                _ => ()
             }
         }
         ret

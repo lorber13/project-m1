@@ -40,11 +40,8 @@ impl Into<&'static str> for DefaultNameMode
 impl PartialEq for DefaultNameMode
 {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other)
-        {
-            (DefaultNameMode::Counter(..), DefaultNameMode::Counter(..)) | (DefaultNameMode::Timestamp, DefaultNameMode::Timestamp) => true,
-            _ => false
-        }
+
+        matches!((self, other), (DefaultNameMode::Counter(..), DefaultNameMode::Counter(..)) | (DefaultNameMode::Timestamp, DefaultNameMode::Timestamp))
     }
 }
 
@@ -168,11 +165,11 @@ impl SaveSettings
             ui.horizontal(|ui|
                 {
                     if ui.button("Save").clicked() {
-                        if self.default_dir.enabled && ( self.default_dir.path.len() == 0 || !std::path::Path::new(&self.default_dir.path).exists())
+                        if self.default_dir.enabled && ( self.default_dir.path.is_empty() || !std::path::Path::new(&self.default_dir.path).exists())
                         {
                             if crate::DEBUG {println!("Found an invalid dir path");}
                             self.alert.borrow_mut().replace("Invalid default directory path.".to_string());
-                        }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.len() == 0
+                        }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.is_empty()
                         {
                             self.alert.borrow_mut().replace("Default name cannot be empty.".to_string());
                         }else {
@@ -233,7 +230,7 @@ impl SaveSettings
 
             DefaultNameMode::Timestamp =>
             {
-                const TIMESTAMP_FMT: &'static str = "%Y-%m-%d_%H%M%S";
+                const TIMESTAMP_FMT: &str = "%Y-%m-%d_%H%M%S";
                 let str = format!("{}{}", self.default_name.name, Local::now().format(TIMESTAMP_FMT));
                 Some(str)
             }
