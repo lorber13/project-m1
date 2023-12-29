@@ -62,9 +62,11 @@ impl From<usize> for HotkeyName {
 /// Questa ridondanza ha l'obiettivo di mantenere stabili le impostazioni originali fino a quando le modifiche non
 /// vengono confermate. Infatti, solo <i>vec</i> viene modificato tramite le chiamate a <i>request_register()</i> e
 /// <i>request_unregister()</i>.<br>
-/// Prima dell'utilizzo di <i>vec</i> per introdurre nuove modifiche deve essere eseguito il metodo <i>prepare_for_updates()</i>.<br>
+/// Prima dell'utilizzo di <i>vec</i> per introdurre nuove modifiche deve essere eseguito il metodo <i>prepare_for_updates()</i>, 
+/// che controlla la coerenza tra <i>backup</i> e <i>vec</i>.<br>
 ///
-/// Esiste la possibilità di disabilitare l'ascolto delle hotkeys, tramite il campo <i>listen_enabled</i>.
+/// Esiste la possibilità di disabilitare l'ascolto delle hotkeys, tramite il campo <i>listen_enabled</i> e il relativo metodo
+/// setter.
 ///
 /// I campi che possono essere modificati sono protetti da RwLock per soddisfare i seguenti requisiti:
 /// - mutabilità interna: il campo deve poter essere modificato, permettendo all'intera struttura di essere posseduta da Arc;
@@ -305,6 +307,14 @@ impl RegisteredHotkeys {
     }
 }
 
+/// Funzione che lancia un thread worker che rimane (con chiamata bloccante recv()) in ascolto di eventi di pressione di
+/// hotkeys. Riceve come parametro il <i>Context</i> della gui per poter svegliare la gui, in qualsiasi stato essa sia,
+/// dopo il verificarsi di un evento. In particolare, questo è utile nel momento in cui l'applicazione ha smesso 
+/// di eseguire il metodo <i>App::update</i> (vedi impl <i>GlobalGuiState</i>) perchè la finestra non è al momento visibile.
+/// 
+/// Quando la chiamata a <i>GlobalHotkeyEvent::receiver.recv()</i> ritorna un evento <i>GlobalHotkeyEvent<i>, esso viene
+/// convertito in <i>HotkeyName<i> utilizzando la struttura <i>RegisterdHotkeys</i> e inviato sul canale con il thread gui. 
+/// Dopodichè, si assicura che la gui possa leggere dal canale, svegliandola con il metodo <i>Context::request_repaint()</i>. 
 pub fn start_thread_listen_hotkeys(
     arc_ctx: Arc<Context>,
     arc_registered_hotkeys: Arc<RegisteredHotkeys>,

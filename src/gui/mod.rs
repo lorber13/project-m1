@@ -1,12 +1,15 @@
 /*
 La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
-mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState (inclusa None).
-Il modulo offre un'interfaccia piu' esterna (Gui, che è un façade) che offre i metodi per passare da
-una finestra all'altra.
-Il  modulo memorizza internamente (nella classe GlobalGuiState) un Sender<SignalToHeadThread> per inviare
-segnali al thread che implementa la logica applicativa. E' infatti lo stesso thread che può richiamare
-le funzioni pubbliche di Gui per modificare ciò che si vede.
+mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState.
+
+La gui è quindi basata su una macchina a stati e le varianti della EnumGuiState incapsulano le variabili
+con i dettagli di ciascuno stato.
+In particolare, se una variante incapsula un Receiver, allora essa rappresenta uno stato di attesa 
+della gui, che fa busy waiting con try_recv(). Si noti che il design della sincronizzazione con altri 
+thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento dell'event loop della gui.
+
+Lo stato della gui è memorizzato dentro la struct GlobalGuiState assieme ad altre informazioni globali.
  */
 
 mod capture_mode;
@@ -83,7 +86,7 @@ pub struct GlobalGuiState {
     registered_hotkeys: Arc<RegisteredHotkeys>,
     /// Contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard.
     clipboard: Option<Receiver<Result<(), arboard::Error>>>,
-
+    /// Receiver del canale di comunicazione con il thread dedicato all'ascolto delle hotkeys
     hotkey_receiver: Option<Receiver<HotkeyName>>,
 }
 
@@ -599,7 +602,7 @@ impl eframe::App for GlobalGuiState {
             }
         }
 
-        //ascolto di hotkeys
+        //ascolto di hotkeys solo nel caso non sia in corso il display di un messagio di errore
         if self.alert.borrow().is_none() {
             if let Some(hr) = &self.hotkey_receiver {
                 match hr.try_recv() {
