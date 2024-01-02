@@ -164,6 +164,7 @@ impl SaveSettings
             ui.add_space(20.0);
             ui.horizontal(|ui|
                 {
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::DARK_GREEN;
                     if ui.button("Save").clicked() {
                         if self.default_dir.enabled && ( self.default_dir.path.is_empty() || !std::path::Path::new(&self.default_dir.path).exists())
                         {
@@ -176,6 +177,7 @@ impl SaveSettings
                             ret = SettingsEvent::Saved;
                         }
                     }
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::RED;
                     if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
                 })
         

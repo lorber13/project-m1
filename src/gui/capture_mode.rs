@@ -37,34 +37,55 @@ impl CaptureMode {
         let mut ret = None;
 
         ScrollArea::new([true, false]).show(ui, |ui| {
-            ui.label("Capture Mode");
             ui.separator();
-            egui::ComboBox::from_label("Area") //menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
-                .selected_text(format!("{:?}", self.area))
-                .show_ui(ui, |ui| {
-                    ui.style_mut().wrap = Some(false);
-                    ui.set_min_width(60.0);
-                    ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
-                    ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
-                })
-                .response
-                .on_hover_text("Choose the desired area");
-
+            ui.colored_label(egui::Color32::WHITE,"Capture Mode");
             ui.separator();
+            egui::Grid::new("my_grid")
+                    .num_columns(2)
+                    .spacing([40.0, 5.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        // ui.horizontal(|ui| {
+                        ui.colored_label(egui::Color32::WHITE, "Area:");
+                        egui::ComboBox::from_label("") //menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
+                            .selected_text(format!("{:?}", self.area))
+                            .show_ui(ui, |ui| {
+                                ui.style_mut().wrap = Some(false);
+                                ui.set_min_width(60.0);
+                                ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
+                                ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
+                            });
+                        ui.label("💡")
+                            //.response
+                            .on_hover_text("Choose the desired area");
+                    //});
 
-            self.screens_combobox(ui, self.screens_mgr.clone(), ctx);
 
-            ui.separator();
+                        ui.end_row();
 
-            //checkbox con spinner per attivare e impostare delay
-            ui.add(egui::Checkbox::new(&mut self.delay.delayed, "Timer"))
-                .on_hover_text("To take a delayed screenshot");
-            if self.delay.delayed {
-                ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
-            }
+                        self.screens_combobox(ui, self.screens_mgr.clone(), ctx);
 
-            ui.separator();
+                        ui.end_row();
+
+                        //checkbox con spinner per attivare e impostare delay
+                        //ui.horizontal(|ui|{
+                            ui.colored_label(egui::Color32::WHITE, "Timer:");
+                            ui.add(egui::Checkbox::new(&mut self.delay.delayed, "  "))
+                                .on_hover_text("To take a delayed screenshot");
+                            if self.delay.delayed {
+                                ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
+                            }
+                        //});
+
+
+                        ui.end_row();
+
+                    });
+
+
+            ui.add_space(30.0);
             // gestione della pressione del pulsante "Acquire": la funzione ritorna Some(..) al posto di None
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::BLUE;
             if ui
                 .button("Acquire")
                 .on_hover_text(
@@ -74,6 +95,7 @@ impl CaptureMode {
             {
                 ret = Some((self.area.clone(), self.delay.scalar));
             }
+
         });
         ret
     }
@@ -93,8 +115,9 @@ impl CaptureMode {
         screens_manager: Arc<ScreensManager>,
         ctx: &egui::Context,
     ) {
-        ui.horizontal(|ui| {
-            egui::ComboBox::from_label("Screen") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
+        //ui.horizontal(|ui| {
+            ui.colored_label(egui::Color32::WHITE, "Screen:");
+            egui::ComboBox::from_label(" ") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
                 .selected_text(format!(
                     "{:?}",
                     screens_manager.get_current_screen_index() + 1
@@ -135,6 +158,6 @@ impl CaptureMode {
             if ui.button("↺").on_hover_text("Refresh").clicked() {
                 screens_manager.update_available_screens();
             }
-        });
+        //});
     }
 }
