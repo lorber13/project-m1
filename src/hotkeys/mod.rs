@@ -201,7 +201,6 @@ impl RegisteredHotkeys {
     }
 
     ///Esegue un ciclo su tutte le hotkeys registrate e le confronta con quella passata.
-    ///
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
@@ -217,6 +216,15 @@ impl RegisteredHotkeys {
         false
     }
 
+    ///Memorizza l'associazione tra la hotkey <i>name</i> e la combinazione di tasti scritta sotto forma di stringa <i>h_str</i>.
+    ///Per controllare la correttezza sintattica della stringa utilizza <i>Hotkey::from_str().is_ok()</i>.
+    ///
+    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo creando una <b>richiesta</b> di registrazione, che si tradurrà nella registrazione della hotkey
+    ///solo quando verrà richiamato <i>self::update_changes()</i>.
+    ///
+    /// Le operazioni sono eseguite in un thread separato, il quale al termine invierà un segnale tramite il <i>tx</i> passato.
+    ///Si è deciso di parallelizzare visto il design scalabile del modulo: è previsto che la lista di Hotkeys possa diventare
+    ///più lunga, quindi la sua lettura integrale più onerosa.
     pub fn request_register(
         self: &Arc<Self>,
         h_str: String,
@@ -245,6 +253,9 @@ impl RegisteredHotkeys {
         });
     }
 
+    ///Esegue la registrazione della hotkey presso il <i>GlobalHotkeyManager</i>.
+    ///Se la registrazione ha avuto successo, aggiorna in <i>self::backup<i> l'informazione relativa alla
+    /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore.
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
