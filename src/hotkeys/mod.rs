@@ -150,6 +150,12 @@ impl RegisteredHotkeys {
         ret
     }
 
+    ///Metodo da richiamare <b>sempre</b> prima di iniziare una sessione di modifica.
+    ///Copia il contenuto di <i>self::backup</i> in <i>self::vec</i> in modo che quest'ultimo possa essere
+    ///modificato a partire da dati consistenti.
+    ///
+    ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia,
+    ///eseguita da un altro thread, termini.
     pub fn prepare_for_updates(self: &Arc<Self>) -> Receiver<()> {
         let (tx, rx) = channel();
         let self_clone = self.clone();
@@ -194,6 +200,8 @@ impl RegisteredHotkeys {
         rx
     }
 
+    ///Esegue un ciclo su tutte le hotkeys registrate e le confronta con quella passata.
+    ///
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
