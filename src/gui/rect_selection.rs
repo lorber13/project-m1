@@ -1,6 +1,6 @@
-use crate::gui::edit_image::obscure_screen;
+use crate::edit_image_utils::obscure_screen;
 use eframe::egui;
-use eframe::egui::{Context, CursorIcon, TextureHandle};
+use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Vec2};
 use image::RgbaImage;
 
@@ -77,12 +77,14 @@ impl RectSelection {
                         obscure_screen(
                             &painter,
                             Rect::from_points(&[pos, response.hover_pos().expect("error")]),
+                            Stroke::new(3.0, Color32::WHITE),
                         );
                     }
                 } else if response.drag_released() {
                     if let Some(pos) = self.start_drag_point {
                         ret = Some(
                             (
+                                // todo: with HiDPI screens using scaling the rectangle is wrong
                                 // different displays have different pixels_per_point
                                 Rect::from_points(&[
                                     pos2(
