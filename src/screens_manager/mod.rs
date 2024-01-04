@@ -1,4 +1,4 @@
-use eframe::egui::Context;
+
 use image::{imageops::FilterType, RgbaImage};
 use screenshots::{DisplayInfo, Screen};
 use std::io::Write;
