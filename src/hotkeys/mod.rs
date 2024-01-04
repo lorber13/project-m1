@@ -85,7 +85,7 @@ pub struct RegisteredHotkeys {
     ///Mette a disposizione i metodi per attivare/disattivare l'effettivo ascolto delle hotkeys.
     ghm: GlobalHotKeyManager,
     ///Per disattivare temporaneamente le Hotkeys senza dover richiamare <i>unregister()</i>.
-    listen_enabled: RwLok<bool>,
+    listen_enabled: RwLock<bool>,
 }
 
 impl RegisteredHotkeys {
