@@ -12,6 +12,7 @@ use imageproc::drawing::{
 };
 use imageproc::point::Point;
 
+/// definisce una direzione (di ridimensionamento, per il ritaglio)
 #[derive(PartialEq, Debug)]
 pub enum Direction {
     Top,
@@ -24,12 +25,15 @@ pub enum Direction {
     BottomRight,
 }
 
+/// trasforma un punto sulla finestra in un punto rispetto alle dimensioni reali dell'immagine
 pub fn unscaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
     pos2(
         (point.x - top_left.x) / scale_ratio,
         (point.y - top_left.y) / scale_ratio,
     )
 }
+
+/// trasforma un rettangolo sulla finestra in un rettangolo rispetto alle dimensioni reali dell'immagine
 pub fn unscaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     Rect::from_two_pos(
         unscaled_point(top_left, scale_ratio, rect.left_top()),
@@ -37,6 +41,8 @@ pub fn unscaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     )
 }
 
+/// trasforma un rettangolo rispetto alle dimensioni dell'immagine in un rettangolo scalato sulle dimensioni della
+/// finestra
 pub fn scaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     Rect::from_two_pos(
         scaled_point(top_left, scale_ratio, rect.left_top()),
@@ -44,6 +50,7 @@ pub fn scaled_rect(top_left: Pos2, scale_ratio: f32, rect: Rect) -> Rect {
     )
 }
 
+/// trasforma un punto rispetto alle dimensioni dell'immagine in un punto scalato sulle dimensioni della finestra
 pub fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
     pos2(
         point.x * scale_ratio + top_left.x,
@@ -51,6 +58,8 @@ pub fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
     )
 }
 
+/// dato un segmento definito come due punti nello spazio + uno spessore, la funzione ritorna i 4 punti di un
+/// rettangolo che rappresenta lo stesso segmento.
 pub fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] {
     // todo: can I obtain this without using sqrt?
     let x1 = points[0].x;
@@ -69,6 +78,8 @@ pub fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] 
     [point1, point2, point3, point4]
 }
 
+/// la funzione trasforma un rettangolo degenere (con dimensioni negative) nel rettangolo identico ma con dimensioni
+/// positive
 pub fn make_rect_legal(rect: &mut Rect) {
     let width = rect.width();
     let height = rect.height();
@@ -82,6 +93,8 @@ pub fn make_rect_legal(rect: &mut Rect) {
     }
 }
 
+/// oscura lo schermo eccetto l'area ritagliata. Lo spessore e il colore del bordo possono essere personalizzati con il
+/// parametro stroke
 pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke) {
     // todo: there are two white vertical lines to be removed
     painter.rect_filled(
@@ -127,6 +140,7 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
     painter.rect_stroke(except_rectangle, Rounding::none(), stroke);
 }
 
+/// disegna l'interfaccia che definisce il colore del tratto e il suo spessore
 pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { width, color } = stroke;
     ui.horizontal(|ui| {
@@ -144,6 +158,8 @@ pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke) {
         );
     });
 }
+
+/// crea un cerchio (o una circonferenza) in scala rispetto alle dimensioni effettive dell'immagine
 pub fn create_circle(
     filled: bool,
     scale_ratio: f32,
@@ -170,6 +186,7 @@ pub fn create_circle(
     circle
 }
 
+/// crea un rettangolo (colorato o solo bordo) in scala rispetto alle dimensioni effettive dell'immagine
 pub fn create_rect(
     filled: bool,
     scale_ratio: f32,
@@ -202,6 +219,8 @@ pub fn create_rect(
     }
 }
 
+/// crea una freccia in scala rispetto all'immagine, che viene inserita nel gruppo di annotazioni come un insieme di
+/// tre segmenti
 pub fn push_arrow_into_annotations(
     annotations: &mut Vec<Shape>,
     scale_ratio: f32,
@@ -243,6 +262,8 @@ pub fn push_arrow_into_annotations(
     });
 }
 
+/// ridimensiona il rettangolo in base alla direzione di ridimensionamento. A seconda della direzione in cui si sta
+/// ridimensionando il rettangolo, viene settato il bordo giusto alla posizione corrente del cursore.
 pub fn resize_rectangle(
     mut rectangle: Rect,
     hover_pos: Pos2,
@@ -287,6 +308,7 @@ pub fn resize_rectangle(
     rectangle
 }
 
+/// In base alla direzione, viene impostato il cursore in ridimensionamento
 pub fn set_cursor(direction: &Direction, ctx: &Context) {
     match direction {
         Direction::Top | Direction::Bottom => {
@@ -310,6 +332,9 @@ pub fn set_cursor(direction: &Direction, ctx: &Context) {
     }
 }
 
+/// sulla base di una tolleranza (sarebbe troppo difficile allineare perfettamente il cursore su un bordo di un pixel),
+/// se il cursore viene spostato sul bordo del rettangolo, viene modificato per rispecchiare la direzione di
+/// ridimensionamento.
 pub fn hover_to_direction(
     borders_rect: Rect,
     hover_pos: Pos2,
@@ -384,6 +409,7 @@ pub fn hover_to_direction(
     }
 }
 
+/// scala l'annotazione (cerchio, segmento, quadrato) sulle dimensioni della finestra
 pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2) {
     match annotation {
         Shape::Rect(rect_shape) => {
@@ -412,6 +438,8 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
     }
 }
 
+/// prima di passare al salvataggio dell'immagine su memoria di massa, le annotazioni vengono scritte sull'immagine, in
+/// memoria RAM
 pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<RgbaImage>) {
     match annotation {
         Shape::Rect(rect_shape) => {

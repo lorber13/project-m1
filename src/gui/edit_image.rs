@@ -17,6 +17,11 @@ use imageproc::drawing::Blend;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 
+/// indica se e' stato premuto uno dei pulsanti Save o Abort.
+/// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
+/// Lo stato Aborted indica che e' stato premuto il pulsante Abort
+/// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
+/// (RgbaImage), e il suo formato (ImageFormat)
 pub enum EditImageEvent {
     Saved {
         image: RgbaImage,
@@ -26,6 +31,10 @@ pub enum EditImageEvent {
     Nil,
 }
 
+/// Rappresenta il tool attualmente in uso. Per ogni tool ci sono dei campi che servono ad indicare lo stato della
+/// forma che si sta disegnando in un certo istante. Per esempio, se siamo nello stato Rect, ci saranno due valori che
+/// indicano la posizione di partenza e di arrivo del trascinamento del cursore (questi due valori determinano
+/// univocamente un rettangolo sullo schermo).
 #[derive(PartialEq, Debug)]
 enum Tool {
     Pen {
@@ -52,6 +61,9 @@ enum Tool {
     */
 }
 
+/// rappresenta lo stato interno al Tool di ritaglio. Se siamo in ritaglio, per ogni frame,
+/// il rettangolo di ritaglio puo' essere mosso, ridimensionato, oppure puo' non essere modificato. Se sta venendo
+/// ridimensionato, viene anche indicata una direzione.
 #[derive(PartialEq, Debug)]
 enum ModificationOfRectangle {
     Move,
@@ -59,6 +71,7 @@ enum ModificationOfRectangle {
     NoModification,
 }
 
+/// Rappresenta la schermata di modifica dello screenshot acquisito
 pub struct EditImage {
     current_tool: Tool,
     cut_rect: Rect,
@@ -73,6 +86,8 @@ pub struct EditImage {
 }
 
 impl EditImage {
+    /// crea una nuova istanza della schermata di modifica dello screenshot. Lo screenshot acquisito viene passato come
+    /// parametro.
     pub fn new(rgba: RgbaImage, ctx: &Context) -> EditImage {
         let texture_handle = ctx.load_texture(
             "screenshot_image",
@@ -100,6 +115,7 @@ impl EditImage {
         }
     }
 
+    /// crea un oggetto Painter, scalato in base alle dimensioni della finestra al frame corrente
     fn allocate_scaled_painter(&mut self, ui: &mut Ui) -> (Response, Painter) {
         self.update_scale_ratio(ui);
         let scaled_dimensions = vec2(
@@ -109,6 +125,9 @@ impl EditImage {
         ui.allocate_painter(scaled_dimensions, Sense::click_and_drag())
     }
 
+    /// visualizza le varie annotazioni dell'utente sull'immagine. In particolare, disegna sulla finestra le
+    /// annotazioni precedenti (gia' salvate), l'annotazione in corso (quella che sta venendo disegnata al frame
+    /// corrente), e infine la regione di ritaglio.
     fn display_annotations(&mut self, painter: &Painter) {
         painter.image(
             self.texture_handle.id(),
@@ -121,6 +140,7 @@ impl EditImage {
         self.draw_cutting_region(painter);
     }
 
+    /// disegna la regione di ritaglio. Puo' essere bianca o gialla a seconda che stia venendo modificata o no.
     fn draw_cutting_region(&mut self, painter: &Painter) {
         if let Tool::Cut { .. } = self.current_tool {
             obscure_screen(
@@ -145,6 +165,7 @@ impl EditImage {
         }
     }
 
+    /// disegna l'annotazione corrente (rettangolo, cerchio, linea, freccia)
     fn draw_current_annotation(&mut self, painter: &Painter) {
         match &self.current_tool {
             Tool::Pen { line } => {
@@ -195,6 +216,7 @@ impl EditImage {
         }
     }
 
+    /// disegna le annotazioni precedenti (tutte quelle che non stanno venendo disegnate al frame corrente)
     fn draw_previous_annotations(&mut self, painter: &Painter) {
         let mut annotations = self.annotations.clone();
         for annotation in annotations.iter_mut() {
@@ -203,6 +225,8 @@ impl EditImage {
         painter.extend(annotations);
     }
 
+    /// ad ogni frame ricalcola il fattore di scalatura dell'immagine (ad ogni frame la dimensione della finestra puo'
+    /// variare)
     fn update_scale_ratio(&mut self, ui: &mut Ui) {
         let available_size = ui.available_size_before_wrap();
         let image_size = self.texture_handle.size_vec2();
@@ -218,6 +242,9 @@ impl EditImage {
             ratio
         };
     }
+
+    /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
+    /// disegnato sulla finestra
     pub fn update(
         &mut self,
         ctx: &Context,
@@ -251,6 +278,9 @@ impl EditImage {
             .inner
     }
 
+    /// gestisce lo stato dell'applicazione sulla base degli eventi che accadono al frame corrente. In base al tool in
+    /// uso, viene aggiornato lo stato dell'annotazione che sta venendo disegnata. Se si tratta per esempio di una
+    /// linea, viene allungata aggiungendo la posizione del cursore al frame corrente.
     fn handle_events(&mut self, ctx: &Context, response: Response, painter_rect: Rect) {
         match &mut self.current_tool {
             Tool::Pen { line } => {
@@ -408,6 +438,8 @@ impl EditImage {
         }
     }
 
+    /// trasla il rettangolo di ritaglio. Se il rettangolo di ritaglio viene portato fuori dai bordi, viene ritraslato
+    /// automaticamente sul bordo piu' vicino
     fn translate_rect(&mut self, response: &Response) {
         let image_rect = Rect::from_min_size(pos2(0.0, 0.0), self.texture_handle.size_vec2());
         let unscaled_delta = response.drag_delta() / self.scale_ratio;
@@ -419,6 +451,7 @@ impl EditImage {
         }
     }
 
+    /// ritrasla automaticamente il rettangolo di ritaglio sul bordo piu' vicino
     fn align_rect_to_borders(&mut self, image_rect: Rect, translated_rect: Rect) {
         self.cut_rect = translated_rect.translate({
             let mut vec = Vec2::default();
@@ -438,6 +471,7 @@ impl EditImage {
         });
     }
 
+    /// disegna i bottoni principali dell'interfaccia
     fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
         ui.horizontal_top(|ui| {
             // todo: when the button is pressed, the enum is initialized, but the button does not keep being selected when the internal state of the enum changes
