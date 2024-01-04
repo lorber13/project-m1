@@ -112,6 +112,7 @@ impl HotkeysSettings
                             //non si può salvare se è in corso la registrazione di una hotkey
                             ui.add_enabled_ui(self.state == HotkeySettingsState::Idle, |ui|
                             {
+                                ui.style_mut().visuals.widgets.hovered.weak_bg_fill = eframe::egui::Color32::DARK_GREEN;
                                 if ui.button("Save").clicked() {
 
                                     match self.registered_hotkeys.update_changes()
@@ -122,6 +123,7 @@ impl HotkeysSettings
                                     
                                 }
                             });
+                            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = eframe::egui::Color32::RED;
                             if ui.button("Abort").clicked() {ret = SettingsEvent::Aborted;}
                             ui.add_space(10.0);
                             ui.heading("❓").on_hover_text("Hotkeys are combinations of keys pressed simultaneously with an associated action.\nThese combinations must be composed by at least one control button and only one key button.\nIf you press one of such hotkeys, the associated action is executed, even if this application is not in focus.\nRemember that these will eventually override other system's hotkeys (such as Ctrl+C) if you select the same combination of keys.")
@@ -197,20 +199,16 @@ impl HotkeysSettings
         let events = ui.input(|i| {i.events.clone()});
         for event in &events
         {
-            match event
+            //la prima lettera premuta termina il processo di registrazione della hotkey
+            if let Event::Key{key, pressed: _ , modifiers, repeat}  = event  
             {
-                //la prima lettera premuta termina il processo di registrazione della hotkey
-                Event::Key{key, pressed: _ , modifiers, repeat}  =>  
+                if modifiers.any() && !(*repeat)
                 {
-                      if modifiers.any() && *repeat == false
-                      {
-                        ret = Some(KeyboardShortcut::new(modifiers.clone(), key.clone()));
-                      }else {
-                          self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
-                          self.state = HotkeySettingsState::Idle;
-                      }
+                    ret = Some(KeyboardShortcut::new(*modifiers, *key));
+                }else {
+                    self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
+                    self.state = HotkeySettingsState::Idle;
                 }
-                _ => ()
             }
         }
         ret
