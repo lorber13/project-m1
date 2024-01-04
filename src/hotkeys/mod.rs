@@ -8,10 +8,11 @@ use std::sync::{Arc, RwLock};
 
 use crate::DEBUG;
 
-///Il numero di varianti della enum HotkeyName.
+///Il numero di varianti della enum HotkeyName. Il modulo Hotkeys è predisposto per scalare ad un maggiore
+///numero di hotkeys.
 pub const N_HOTK: usize = 2;
 
-/// Può esserci una sola combinazione di tasti associata ad ogni variante di questa enum.
+/// Può esserci una sola combinazione di tasti associata ad ogni variante di questa enum. Infatti, ad ogni variante di HotkeyName è associato un comando che può essere dato in input al programma.
 #[derive(Clone, Copy)]
 pub enum HotkeyName {
     FullscreenScreenshot,
@@ -70,19 +71,27 @@ impl From<usize> for HotkeyName {
 ///
 /// I campi che possono essere modificati sono protetti da RwLock per soddisfare i seguenti requisiti:
 /// - mutabilità interna: il campo deve poter essere modificato, permettendo all'intera struttura di essere posseduta da Arc;
-/// - la struttura deve essere multithread-safe, quindi il tipo Cell non sarebbe bastato.<br>
+/// - la struttura deve essere thread-safe, quindi il tipo Cell non sarebbe bastato.<br>
 ///
 /// Si è deciso di incapsulare ogni cella dei vettori (<i>backup, vec</i>) in un RwLock e non incapsulare ciascun vettore in un unico
 /// RwLock per permettere maggiore parallelismo nel loro accesso.
 pub struct RegisteredHotkeys {
+    ///Memorizzazione stabile delle hotkey registrate. Questo Vec viene modificato solo quando una modifica viene salvata.
+    ///Si fa riferimento al contenuto di questo <i>Vec</i> per sapere quali comandi devono essere eseguiti in seguito alla
+    ///digitazione delle hotkeys.
     backup: Vec<RwLock<Option<(HotKey, String)>>>,
+    ///Copia di "brutta" del vettore di Hotkeys, modificato direttamente durante il settaggio delle impostazioni.
     pub vec: Vec<RwLock<Option<String>>>,
+    ///Mette a disposizione i metodi per attivare/disattivare l'effettivo ascolto delle hotkeys.
     ghm: GlobalHotKeyManager,
-    listen_enabled: RwLock<bool>,
+    ///Per disattivare temporaneamente le Hotkeys senza dover richiamare <i>unregister()</i>.
+    listen_enabled: RwLok<bool>,
 }
 
 impl RegisteredHotkeys {
-    /// Crea
+    /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti. 
+    ///Imposta <i>listen_enabled</i> a true di default.
+    ///Ritorna la struttura già incapsulata in un <i>Arc</i>.
     pub fn new() -> Arc<Self> {
         let mut vec = vec![];
         let mut backup = vec![];
@@ -99,6 +108,14 @@ impl RegisteredHotkeys {
         Arc::new(ret)
     }
 
+    ///Copia il contenuto di <i>self::vec</i> dentro a <i>self::backup</i>, 
+    ///andando a richiamare <i>self:: registrer()/unregister()<i> in base alle differenze tra le celle 
+    ///dei due vettori associate alla stessa <i>HotkeyName</i>.
+    ///In particolare, se per una determinata <i>HotkeyName</i> era già stata memorizzata una combinazione di
+    ///tasti (CT), si ha l'accortezza di richiamare i metodi per la registrazione solo se effettivamente la CT è
+    ///cambiata: questo può essere rilevato convertendo le CT in stringhe ed eseguendo il metodo <i>cmp()</i>.
+    ///
+    ///Ad ogni operazione di registrazione, controlla se si sono verificati errori.
     pub fn update_changes(self: &Arc<Self>) -> Result<(), String> {
         let mut ret = Ok(());
         for i in 0..N_HOTK {
@@ -133,6 +150,12 @@ impl RegisteredHotkeys {
         ret
     }
 
+    ///Metodo da richiamare <b>sempre</b> prima di iniziare una sessione di modifica.
+    ///Copia il contenuto di <i>self::backup</i> in <i>self::vec</i> in modo che quest'ultimo possa essere
+    ///modificato a partire da dati consistenti.
+    ///
+    ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia,
+    ///eseguita da un altro thread, termini.
     pub fn prepare_for_updates(self: &Arc<Self>) -> Receiver<()> {
         let (tx, rx) = channel();
         let self_clone = self.clone();
@@ -177,6 +200,7 @@ impl RegisteredHotkeys {
         rx
     }
 
+    ///Esegue un ciclo su tutte le hotkeys registrate e le confronta con quella passata.
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
@@ -192,6 +216,15 @@ impl RegisteredHotkeys {
         false
     }
 
+    ///Memorizza l'associazione tra la hotkey <i>name</i> e la combinazione di tasti scritta sotto forma di stringa <i>h_str</i>.
+    ///Per controllare la correttezza sintattica della stringa utilizza <i>Hotkey::from_str().is_ok()</i>.
+    ///
+    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo creando una <b>richiesta</b> di registrazione, che si tradurrà nella registrazione della hotkey
+    ///solo quando verrà richiamato <i>self::update_changes()</i>.
+    ///
+    /// Le operazioni sono eseguite in un thread separato, il quale al termine invierà un segnale tramite il <i>tx</i> passato.
+    ///Si è deciso di parallelizzare visto il design scalabile del modulo: è previsto che la lista di Hotkeys possa diventare
+    ///più lunga, quindi la sua lettura integrale più onerosa.
     pub fn request_register(
         self: &Arc<Self>,
         h_str: String,
@@ -220,6 +253,9 @@ impl RegisteredHotkeys {
         });
     }
 
+    ///Esegue la registrazione della hotkey presso il <i>GlobalHotkeyManager</i>.
+    ///Se la registrazione ha avuto successo, aggiorna in <i>self::backup<i> l'informazione relativa alla
+    /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore.
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
