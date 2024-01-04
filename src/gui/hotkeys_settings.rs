@@ -71,7 +71,10 @@ impl HotkeysSettings
     {
         let mut ret = SettingsEvent::Nil;
 
-
+        ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
+        ui.separator();
+        ui.label(eframe::egui::RichText::new("Hotkeys settings").color(eframe::egui::Color32::WHITE).heading());
+        ui.separator();
         //controllo se c'è almeno un worker che ha ritornato errore
         while let Ok(r) = self.workers_channel.1.try_recv()
         {
@@ -158,7 +161,7 @@ impl HotkeysSettings
     {
         let mut label: String = hn.into();
         label.push_str(": ");
-
+        ui.style_mut().visuals.widgets.hovered.weak_bg_fill = eframe::egui::Color32::from_rgb(0,140,250);
         ui.add_enabled_ui(self.state == HotkeySettingsState::Idle || self.state == HotkeySettingsState::Registering(hn), |ui|
         {
             ui.horizontal(|ui|

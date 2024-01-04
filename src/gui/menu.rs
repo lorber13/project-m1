@@ -65,6 +65,7 @@ impl MainMenu {
     ) -> MainMenuEvent {
         let mut ret = MainMenuEvent::Nil;
         CentralPanel::default().show(ctx, |ui| {
+            ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
             ui.add_enabled_ui(enabled, |ui| {
                 ui.horizontal(|ui| {
                     ui.menu_button("☰", |ui| {

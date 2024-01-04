@@ -85,7 +85,7 @@ pub struct RegisteredHotkeys {
     ///Mette a disposizione i metodi per attivare/disattivare l'effettivo ascolto delle hotkeys.
     ghm: GlobalHotKeyManager,
     ///Per disattivare temporaneamente le Hotkeys senza dover richiamare <i>unregister()</i>.
-    listen_enabled: RwLok<bool>,
+    listen_enabled: RwLock<bool>,
 }
 
 impl RegisteredHotkeys {
@@ -150,6 +150,12 @@ impl RegisteredHotkeys {
         ret
     }
 
+    ///Metodo da richiamare <b>sempre</b> prima di iniziare una sessione di modifica.
+    ///Copia il contenuto di <i>self::backup</i> in <i>self::vec</i> in modo che quest'ultimo possa essere
+    ///modificato a partire da dati consistenti.
+    ///
+    ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia,
+    ///eseguita da un altro thread, termini.
     pub fn prepare_for_updates(self: &Arc<Self>) -> Receiver<()> {
         let (tx, rx) = channel();
         let self_clone = self.clone();
@@ -194,6 +200,7 @@ impl RegisteredHotkeys {
         rx
     }
 
+    ///Esegue un ciclo su tutte le hotkeys registrate e le confronta con quella passata.
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
@@ -209,6 +216,15 @@ impl RegisteredHotkeys {
         false
     }
 
+    ///Memorizza l'associazione tra la hotkey <i>name</i> e la combinazione di tasti scritta sotto forma di stringa <i>h_str</i>.
+    ///Per controllare la correttezza sintattica della stringa utilizza <i>Hotkey::from_str().is_ok()</i>.
+    ///
+    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo creando una <b>richiesta</b> di registrazione, che si tradurrà nella registrazione della hotkey
+    ///solo quando verrà richiamato <i>self::update_changes()</i>.
+    ///
+    /// Le operazioni sono eseguite in un thread separato, il quale al termine invierà un segnale tramite il <i>tx</i> passato.
+    ///Si è deciso di parallelizzare visto il design scalabile del modulo: è previsto che la lista di Hotkeys possa diventare
+    ///più lunga, quindi la sua lettura integrale più onerosa.
     pub fn request_register(
         self: &Arc<Self>,
         h_str: String,
@@ -237,6 +253,9 @@ impl RegisteredHotkeys {
         });
     }
 
+    ///Esegue la registrazione della hotkey presso il <i>GlobalHotkeyManager</i>.
+    ///Se la registrazione ha avuto successo, aggiorna in <i>self::backup<i> l'informazione relativa alla
+    /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore.
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
@@ -279,6 +298,10 @@ impl RegisteredHotkeys {
         ))
     }
 
+    ///Cancella l'associazione tra la hotkey <i>name</i> e la combinazione di tasti memorizzata nella corrispondente entry di <i>self::vec</i>.
+    ///
+    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo modificando la copia temporanea <i>self::vec</i>. 
+    ///Le modifiche possono essere rese definitive richiamando <i>self::update_changes()</i>.
     pub fn request_unregister(self: &Arc<Self>, name: HotkeyName) {
         let _ = self
             .vec
@@ -289,6 +312,10 @@ impl RegisteredHotkeys {
             .take();
     }
 
+    ///Legge, da <i>self::backup</i>, qual'è la combinazione di tasti associata alla hotkey <i>name</i>.
+    ///Se trova una combinazione valida, chiede l'annullamento della registrazione presso il <i>GlobalHotkeyManager</i>
+    ///e ritorna l'esito di tale operazione.
+    ///
     /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
     fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), String> {
         let temp = self
@@ -309,6 +336,9 @@ impl RegisteredHotkeys {
         ))
     }
 
+    ///Ritorna la combinazione di tasti associata alla hotkey <i>name</i> espressa come stringa di tasti separati dal carattere '+'.
+    ///Siccome il metodo è pensato per poter essere usato durante la modifica delle <i>RegisteredHotkeys</i> da parte
+    ///di una schermata di impostazioni, quello che è ritornato è il contenuto di <i>self::vec</i> e non di <i>self::backup</i>.
     pub fn get_hotkey_string(self: &Arc<Self>, name: HotkeyName) -> Option<String> {
         self.vec
             .get(<HotkeyName as Into<usize>>::into(name))
@@ -327,7 +357,7 @@ impl RegisteredHotkeys {
 /// Funzione che lancia un thread worker che rimane (con chiamata bloccante recv()) in ascolto di eventi di pressione di
 /// hotkeys. Riceve come parametro il <i>Context</i> della gui per poter svegliare la gui, in qualsiasi stato essa sia,
 /// dopo il verificarsi di un evento. In particolare, questo è utile nel momento in cui l'applicazione ha smesso 
-/// di eseguire il metodo <i>App::update</i> (vedi impl <i>GlobalGuiState</i>) perchè la finestra non è al momento visibile.
+/// di eseguire il metodo <i>App::update()</i> (vedi impl <i>GlobalGuiState</i>) perchè la finestra non è al momento visibile.
 /// 
 /// Quando la chiamata a <i>GlobalHotkeyEvent::receiver.recv()</i> ritorna un evento <i>GlobalHotkeyEvent<i>, esso viene
 /// convertito in <i>HotkeyName<i> utilizzando la struttura <i>RegisterdHotkeys</i> e inviato sul canale con il thread gui. 

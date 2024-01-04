@@ -1,5 +1,5 @@
 use super::screens_manager::ScreensManager;
-use eframe::egui::{self, ScrollArea};
+use eframe::egui::{self, ScrollArea, vec2};
 extern crate image;
 use super::super::itc::{Delay, ScreenshotDim};
 use eframe::egui::ColorImage;
@@ -38,7 +38,9 @@ impl CaptureMode {
 
         ScrollArea::new([true, false]).show(ui, |ui| {
             ui.separator();
-            ui.colored_label(egui::Color32::WHITE,"Capture Mode");
+            ui.label(egui::RichText::new("Capture Mode").heading().color(egui::Color32::WHITE));
+            ui.style_mut().spacing.button_padding = vec2(12.0, 3.0);
+            ui.style_mut().visuals.slider_trailing_fill = true;
             ui.separator();
             egui::Grid::new("my_grid")
                     .num_columns(2)
@@ -85,7 +87,7 @@ impl CaptureMode {
 
             ui.add_space(30.0);
             // gestione della pressione del pulsante "Acquire": la funzione ritorna Some(..) al posto di None
-            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::BLUE;
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0,140,250);
             if ui
                 .button("Acquire")
                 .on_hover_text(
