@@ -3,6 +3,7 @@ use crate::edit_image_utils::{
     push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
     stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
 };
+use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
 use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
@@ -13,6 +14,8 @@ use eframe::egui::{ComboBox, CursorIcon};
 use image::imageops::crop_imm;
 use image::RgbaImage;
 use imageproc::drawing::Blend;
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::thread;
 
 pub enum EditImageEvent {
     Saved {
@@ -61,11 +64,12 @@ pub struct EditImage {
     cut_rect: Rect,
     stroke: Stroke,
     fill_shape: bool,
-    image_blend: Blend<RgbaImage>,
+    image: RgbaImage,
     format: ImageFormat,
     texture_handle: TextureHandle,
     annotations: Vec<Shape>,
     scale_ratio: f32,
+    receive_thread: Receiver<RgbaImage>,
 }
 
 impl EditImage {
@@ -78,11 +82,12 @@ impl EditImage {
             ),
             TextureOptions::default(),
         );
+        let (_, rx) = channel();
         EditImage {
             cut_rect: Rect::from_min_size(pos2(0.0, 0.0), texture_handle.size_vec2()),
             current_tool: Tool::Pen { line: Vec::new() },
             texture_handle,
-            image_blend: Blend(rgba),
+            image: rgba,
             format: ImageFormat::Png,
             annotations: Vec::new(),
             scale_ratio: Default::default(),
@@ -91,6 +96,7 @@ impl EditImage {
                 color: Color32::GREEN,
             },
             fill_shape: false,
+            receive_thread: rx,
         }
     }
 
@@ -219,16 +225,28 @@ impl EditImage {
         enabled: bool,
     ) -> EditImageEvent {
         CentralPanel::default()
-            .show(ctx, |ui| {
-                ui.add_enabled_ui(enabled, |ui| {
-                    let ret = self.draw_menu_buttons(ui);
-                    ui.separator();
-                    let (response, painter) = self.allocate_scaled_painter(ui);
-                    self.handle_events(ctx, response, painter.clip_rect());
-                    self.display_annotations(&painter);
-                    ret
-                })
-                .inner
+            .show(ctx, |ui| match self.receive_thread.try_recv() {
+                Ok(image) => EditImageEvent::Saved {
+                    image,
+                    format: self.format,
+                },
+                Err(error) => match error {
+                    TryRecvError::Empty => {
+                        show_loading(ctx);
+                        EditImageEvent::Nil
+                    }
+                    TryRecvError::Disconnected => {
+                        ui.add_enabled_ui(enabled, |ui| {
+                            let ret = self.draw_menu_buttons(ui);
+                            ui.separator();
+                            let (response, painter) = self.allocate_scaled_painter(ui);
+                            self.handle_events(ctx, response, painter.clip_rect());
+                            self.display_annotations(&painter);
+                            ret
+                        })
+                        .inner
+                    }
+                },
             })
             .inner
     }
@@ -491,20 +509,28 @@ impl EditImage {
                     ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
                 });
             if ui.button("Save").clicked() {
-                for annotation in &self.annotations {
-                    write_annotation_to_image(annotation, &mut self.image_blend);
-                }
-                EditImageEvent::Saved {
-                    image: crop_imm(
-                        &self.image_blend.0,
-                        self.cut_rect.left_top().x as u32,
-                        self.cut_rect.left_top().y as u32,
-                        self.cut_rect.width() as u32,
-                        self.cut_rect.height() as u32,
+                let (tx, rx) = channel();
+                self.receive_thread = rx;
+                let annotations = self.annotations.clone();
+                let image = self.image.clone();
+                let cut_rect = self.cut_rect;
+                thread::spawn(move || {
+                    let mut image_blend = Blend(image);
+                    for annotation in annotations {
+                        write_annotation_to_image(&annotation, &mut image_blend);
+                    }
+                    tx.send(
+                        crop_imm(
+                            &image_blend.0,
+                            cut_rect.left_top().x as u32,
+                            cut_rect.left_top().y as u32,
+                            cut_rect.width() as u32,
+                            cut_rect.height() as u32,
+                        )
+                        .to_image(),
                     )
-                    .to_image(),
-                    format: self.format,
-                }
+                });
+                EditImageEvent::Nil
             } else if ui.button("Abort").clicked() {
                 EditImageEvent::Aborted
             } else {
