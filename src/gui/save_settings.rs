@@ -104,7 +104,11 @@ impl SaveSettings
         ui.set_height(ui.available_height());
         ScrollArea::new([true, false]).show(ui, |ui|
         {
+            ui.separator();
+            ui.label(eframe::egui::RichText::new("Save settings").color(eframe::egui::Color32::WHITE).heading());
+            ui.separator();
             ui.add(egui::Checkbox::new(&mut self.default_dir.enabled, "Save all screenshot in a default directory"));
+            ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
             ui.add_enabled_ui(self.default_dir.enabled, |ui|
             {
                 ui.horizontal(|ui|
