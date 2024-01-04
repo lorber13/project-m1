@@ -298,10 +298,11 @@ impl RegisteredHotkeys {
         ))
     }
 
-    ///Cancella l'associazione tra la hotkey <i>name</i> e la combinazione di tasti memorizzata nella corrispondente entry di <i>self::vec</i>.
+    ///Cancella l'associazione tra la hotkey <i>name</i> e la combinazione di tasti memorizzata nella corrispondente entry di <i>self::vec</i>.
     ///
     ///<b>ATTENZIONE:</b> con questo metodo, si sta solo modificando la copia temporanea <i>self::vec</i>. 
-    ///Le modifiche possono essere rese definitive richiamando <i>self::update_changes()</i>.
+    ///Le modifiche possono essere rese definitive richiamando <i>self::update_changes()</i>.
+
     pub fn request_unregister(self: &Arc<Self>, name: HotkeyName) {
         let _ = self
             .vec

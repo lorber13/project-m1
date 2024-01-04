@@ -574,9 +574,11 @@ impl eframe::App for GlobalGuiState {
         //gestione di eventuali operazioni sulla clipboard
         self.manage_clipboard();
 
+        /*
         if crate::DEBUG {
             println!("state = {:?}", self.state);
         }
+        */
 
         match &mut self.state {
             EnumGuiState::MainMenu(..) => {
