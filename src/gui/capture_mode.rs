@@ -44,7 +44,7 @@ impl CaptureMode {
             ui.separator();
             egui::Grid::new("my_grid")
                     .num_columns(2)
-                    .spacing([40.0, 5.0])
+                    //.spacing([40.0, 5.0])
                     .striped(true)
                     .show(ui, |ui| {
                         // ui.horizontal(|ui| {
@@ -57,9 +57,9 @@ impl CaptureMode {
                                 ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
                                 ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                             });
-                        ui.label("💡")
+                        ui.label("❓")
                             //.response
-                            .on_hover_text("Choose the desired area");
+                            .on_hover_text("Choose if you want to select a restricted area (Rectangle) or not (Fullscreen).");
                     //});
 
 
