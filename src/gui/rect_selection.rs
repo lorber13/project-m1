@@ -1,4 +1,4 @@
-use crate::gui::edit_image::obscure_screen;
+use crate::edit_image_utils::obscure_screen;
 use eframe::egui;
 use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Vec2};
