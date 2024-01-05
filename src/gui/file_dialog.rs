@@ -15,8 +15,8 @@ use crate::image_coding::ImageFormat;
 /// - None, se l'user ha annullato;<br>
 /// - Some(PathBuf), se l'user ha dato un nome al file e premuto su "Save".<br>
 ///   Il path è assoluto e contiene il nome del file <b>senza estensione</b>.<br>
-pub fn show_save_dialog(format: &ImageFormat, start_dir: Option<&str>) -> Option<PathBuf> {
-    let dir = if let Some(s) = start_dir {
+pub fn show_save_dialog(format: ImageFormat, start_dir: Option<String>) -> Option<PathBuf> {
+    let dir = if let Some(s) = &start_dir {
         if !s.is_empty() && Path::new(&s).exists() {
             s
         } else {
@@ -27,7 +27,7 @@ pub fn show_save_dialog(format: &ImageFormat, start_dir: Option<&str>) -> Option
     };
 
     FileDialog::new()
-        .add_filter("image", &[(*format).into()])
+        .add_filter("image", &[format.into()])
         .set_directory(dir)
         .save_file()
 }

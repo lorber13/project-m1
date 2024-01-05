@@ -4,9 +4,7 @@ use image::{ImageError, RgbaImage};
 use std::fs::File;
 use std::io::Write;
 use std::{
-    ffi::OsStr,
     io::stdout,
-    path::PathBuf,
     sync::mpsc::{channel, Receiver},
 };
 
@@ -84,31 +82,20 @@ fn crop_image(rect: Rect, img: RgbaImage) -> RgbaImage {
 }
 
 pub fn start_thread_save_image(
-    dir_path: std::path::PathBuf,
-    file_name: String,
-    extension: String,
+    path: std::path::PathBuf,
     img: RgbaImage,
 ) -> Receiver<image::ImageResult<()>> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
-        let mut file_output = dir_path;
-        if file_output.is_dir() {
-            let mut temp: Vec<std::path::Component> = file_output.components().collect();
-            temp.push(std::path::Component::Normal(OsStr::new("to_be_replaced")));
-            file_output = PathBuf::from_iter(temp.iter());
-        }
-        file_output.set_file_name(file_name);
-        file_output.set_extension(extension);
-
         if DEBUG {
             let _ = writeln!(
                 stdout(),
                 "DEBUG: saving new image: {}",
-                file_output.display()
+                path.display()
             );
         }
 
-        let _ = tx.send(save_image(file_output, img));
+        let _ = tx.send(save_image(path, img));
     });
     rx
 }
@@ -150,9 +137,7 @@ mod tests {
     fn save_test() {
         let img = image::RgbaImage::new(0, 0);
         let r = crate::image_coding::start_thread_save_image(
-            "test.png".into(),
-            "screenshot".to_string(),
-            "png".to_string(),
+            "./test.png".into(),
             img,
         );
         assert!(r.recv().is_ok());
