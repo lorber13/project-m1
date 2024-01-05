@@ -1,3 +1,6 @@
+/* Modulo dedicato all'elaborazione di immagini: scrittura in memoria secondaria, copia nella clipboard e ritaglio.
+Siccome sono operazioni onerose, per ogni funzionalità sono messi a disposizione metodi per lanciare un thread worker. */
+
 use arboard::{Clipboard, ImageData};
 use eframe::emath::Rect;
 use image::{ImageError, RgbaImage};
@@ -14,8 +17,7 @@ use crate::DEBUG;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum ImageFormat {
-    //Enum per selezione del formato
+pub enum ImageFormat {
     Png,
     JPEG,
     GIF,
@@ -32,6 +34,7 @@ impl Into<&str> for ImageFormat {
 }
 
 impl ImageFormat {
+    ///Utility per ottenere l'elenco dei formati contenuti nella enum sotto forma di stringhe.
     pub fn available_formats() -> Vec<&'static str> {
         vec![
             ImageFormat::Png.into(),
@@ -41,6 +44,8 @@ impl ImageFormat {
     }
 }
 
+///Crea un canale e muove il suo  <i>Sender</i> ad un nuovo thread, il quale si occupa di eseguire <i>copy_to_clipboard()</i>
+///ed inviare il risultato sul canale.
 pub fn start_thread_copy_to_clipboard(img: &RgbaImage) -> Receiver<Result<(), arboard::Error>> {
     let (tx, rx) = channel();
     let i = img.clone();
@@ -60,6 +65,10 @@ fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error> {
     ctx2.set_image(img_data) //settare l'immagine come elemento copiato negli appunti
 }
 
+///Crea un canale e muove il suo  <i>Sender</i> ad un nuovo thread, il quale si occupa di eseguire <i>crop_image()</i>
+///ed inviare il risultato sul canale.
+///Ritorna <i>Receiver<Result<...>></i>, nonostante nell'elaborazione non possano verificarsi errori, per maggiore comprensibilità nell'uso del metodo
+///e per una maggiore uniformità per rendere il codice più mantenibile.
 pub fn start_thread_crop_image(
     rect: Rect,
     img: RgbaImage,
@@ -83,6 +92,10 @@ fn crop_image(rect: Rect, img: RgbaImage) -> RgbaImage {
     .to_image()
 }
 
+///Crea un canale e muove il suo  <i>Sender</i> ad un nuovo thread, il quale si occupa di eseguire <i>save_image()</i>
+///ed inviare il risultato sul canale.
+///Prima di avviare il salvataggio, il thread costruisce il Path completo del file di output, gestendo la presenza
+///o meno del nome del file nel parametro <i>dir_path</i>
 pub fn start_thread_save_image(
     dir_path: std::path::PathBuf,
     file_name: String,
@@ -113,6 +126,8 @@ pub fn start_thread_save_image(
     rx
 }
 
+///Controlla che l'estensione del file di output sia tra i formati supportati.
+///Se il formato è GIF, esegue codice specifico per accelerare il salvataggio.
 fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageResult<()> {
     if let Some(ext) = file_output.extension() {
         if ImageFormat::available_formats().contains(&ext.to_str().unwrap()) {
