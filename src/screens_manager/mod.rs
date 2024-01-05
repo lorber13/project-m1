@@ -1,14 +1,30 @@
+/* Modulo per la gestione di tutti gli schermi a disposizione, inclusa la possibilità di eseguire screenshots.
+Mantiene memorizzata una lista contenente, per ogni schermo disponibile, le informazioni principali (id, risoluzione) e uno screenshot fulscreen, utilizzato come icona per rendere riconoscibile lo schermo all'utente.
+L'aggiornamento della lista avviene su richiesta, quando viene richiamato <i>update_available_screens()</i>.
+
+Per praticità, il modulo mette a disposizione la possibilità di memorizzare qual'è lo schermo selezionato dall'utente, su cui saranno eseguite le richieste di screenshot.
+*/
+
+
 
 use image::{imageops::FilterType, RgbaImage};
 use screenshots::{DisplayInfo, Screen};
 use std::io::Write;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
-
-///Mutex e non RwLock perchè la struct è pensata per lavorare con una sola comboBox
+
 pub struct ScreensManager {
+    ///Lista di schermi disponibili e relative icone.
+    ///Incapsulata in un RwLock per poter essere modificata dai metodi interni, pensati essere eseguiti da thread paralleli a quello principale,
+    ///ma solo TODO: finire
+    ///Le immagini associate agli oggetti Screen sono intese come icone, utili per il riconoscimento dello schermo da parte 
+    ///dell'utente. Sono incapsulate in Mutex per permettere la parallelizzazione dell'operazione di creazione delle icone di
+    ///tutti gli schermi collegati (utile perchè, in quanto operazioni con le immagini,si tratta di computazione onerosa, ma il modulo è disegnato per
+    ///essere scalabile nel numero di schermi).
     pub screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
+    ///Indice che fa riferimento al vettore <i>self::screens</i>
     curr_screen_index: RwLock<usize>,
+    ///Larghezza delle icone che verranno prodotte da <i>self::load_icons()</i>.
     icon_width: u32,
 }
 
