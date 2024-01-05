@@ -29,6 +29,8 @@ pub struct ScreensManager {
 }
 
 impl ScreensManager {
+    ///Rileva tutti gli schermi attualmente disponibili e imposta lo schermo primario come quello selezionato
+    ///di default.
     pub fn new(icon_width: u32) -> Arc<Self> {
         let ret = Arc::new(Self {
             screens: RwLock::new(vec![]),
@@ -44,7 +46,13 @@ impl ScreensManager {
     /// Anche l'indice viene modificato, nel caso lo schermo precedentemente selezionato cambi
     /// di posizione nel vettore.
     /// Nel caso lo schermo precedentemente selezionato non venga piu' rilevato,
-    /// di default viene selezionato quello primario
+    /// di default viene selezionato quello primario.
+    ///
+    ///Tutte le operazioni sono eseguite in modo asincrono rispetto al thread che ha richiamato il metodo.
+    ///Infatti, essendo il modulo pensato per essere scalabile nel numero di schermi, la lista può diventare lunga 
+    ///e le operazioni su di essa onerose.
+    ///Per poter eseguire l'elaborazione, il thread dovrà ottenere il lock di <i>self::screens</i> in modalità write.
+    ///Un altro thread che volesse quindi essere 
     pub fn update_available_screens(self: &Arc<Self>) {
         let arc_clone = self.clone();
         std::thread::spawn(move || {
