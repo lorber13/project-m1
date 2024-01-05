@@ -15,8 +15,13 @@ use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 
 pub struct ScreensManager {
     ///Lista di schermi disponibili e relative icone.
-    ///Incapsulata in un RwLock per poter essere modificata dai metodi interni, pensati essere eseguiti da thread paralleli a quello principale,
-    ///ma solo TODO: finire
+    ///Incapsulata in un RwLock per poter:
+    ///- essere modificata in mutua esclusione dai metodi interni, pensati essere eseguiti in thread paralleli 
+    ///a quello principale;
+    ///- consentire l'esecuzione del metodo <i>self::select_screen()</i> (che acquisisce il lock in read per ottenere
+    ///la lunghezza della lista) mentre il thread della gui accede alla lista per poterla mostrare, permettendo anche ad un
+    ///ulteriore thread di accedere alla lista per poter eseguire uno screenshot (vedi <i>self:: start_thread_fullscreen_screenshot()</i>).
+    ///
     ///Le immagini associate agli oggetti Screen sono intese come icone, utili per il riconoscimento dello schermo da parte 
     ///dell'utente. Sono incapsulate in Mutex per permettere la parallelizzazione dell'operazione di creazione delle icone di
     ///tutti gli schermi collegati (utile perchè, in quanto operazioni con le immagini,si tratta di computazione onerosa, ma il modulo è disegnato per
@@ -84,12 +89,22 @@ impl ScreensManager {
         });
     }
 
+    ///Tra gli schermi disponibili (ottenuti dall'ultima rilevazione), permette di selezionare quello su cui
+    ///verranno eseguiti i prossimi screenshots.
+    ///Controlla che l'indice passato sia compatibile con la lunghezza della lista degli schermi. Deve quindi
+    ///leggere <i>self::screens</i>, dopo averne ottenuto il lock in lettura. Questo implica che non si possa cambiare la
+    ///selezione durante l'esecuzione di un refresh, ma che si possa fare mentre la lista <i>self::screens</i> viene acceduta
+    ///per essere mostrata.
     pub fn select_screen(self: &Arc<Self>, index: usize) {
         if index < self.get_screens().len() {
             *self.curr_screen_index.write().unwrap() = index;
         }
     }
 
+    ///Richiama il metodo <i>self::select_screen()</i> passando come indice quello dello schermo che rileva
+    ///come primario.
+    ///Per trovare tale indice, è necessario ottenere il lock in lettura su <i>self::screens</i>: questo è implicitamente fatto con 
+    ///la chiamata a <i>self::get_screens()</i>.
     pub fn select_primary_screen(self: &Arc<Self>) {
         if let Some(i) = self
             .get_screens()
@@ -100,6 +115,11 @@ impl ScreensManager {
         }
     }
 
+    ///Lancia un thread che:
+    ///- attende il delay passato come parametro;
+    ///- esegue uno screenshot sullo schermo attualmente selezionato;
+    ///- invia l'immagine sul canale il cui <i>Receiver</i> è ritornato dal metodo corrente.
+    ///Oppure invia sul canale un messaggio di errore.
     pub fn start_thread_fullscreen_screenshot(
         self: &Arc<Self>,
     ) -> Receiver<Result<RgbaImage, &'static str>> {
@@ -114,6 +134,10 @@ impl ScreensManager {
         rx
     }
 
+
+    ///Ottiene lock in lettura su <i>self::screens</i> per poter accedere alla struttura Screen relativa 
+    ///allo schermo attualmente selezionato e richiamare <i>capture()</i> su essa.
+    ///L'acquisizione del lock implica che il metodo corrente si blocchi se è contemporaneamente eseguito l'aggiornamento di tale lista.
     fn fullscreen_screenshot(self: &Arc<Self>) -> Result<RgbaImage, &'static str> {
         if crate::DEBUG {
             println!("DEBUG: performing fullscreen screenshot");
