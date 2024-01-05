@@ -1,4 +1,6 @@
-use crate::edit_image_utils::{
+pub mod edit_image_utils;
+
+use edit_image_utils::{
     create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
     push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
     stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
