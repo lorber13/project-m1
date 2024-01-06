@@ -153,7 +153,7 @@ impl EditImage {
                     self.scale_ratio,
                     self.cut_rect,
                 ),
-                Stroke::new(3.0, Color32::YELLOW),
+                Stroke::new(3.0, Color32::RED),
             );
         } else {
             obscure_screen(
