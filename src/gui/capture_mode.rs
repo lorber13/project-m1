@@ -38,17 +38,16 @@ impl CaptureMode {
 
         ScrollArea::new([true, false]).show(ui, |ui| {
             ui.separator();
-            ui.label(egui::RichText::new("Capture Mode").heading().color(egui::Color32::WHITE));
+            ui.label(egui::RichText::new("Capture Mode").heading());
             ui.style_mut().spacing.button_padding = vec2(12.0, 3.0);
             ui.style_mut().visuals.slider_trailing_fill = true;
             ui.separator();
             egui::Grid::new("my_grid")
                     .num_columns(2)
-                    .spacing([40.0, 5.0])
                     .striped(true)
                     .show(ui, |ui| {
                         // ui.horizontal(|ui| {
-                        ui.colored_label(egui::Color32::WHITE, "Area:");
+                        ui.label("Area:");
                         egui::ComboBox::from_label("") //menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
                             .selected_text(format!("{:?}", self.area))
                             .show_ui(ui, |ui| {
@@ -57,9 +56,9 @@ impl CaptureMode {
                                 ui.selectable_value(&mut self.area, ScreenshotDim::Fullscreen, "Full Screen");
                                 ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                             });
-                        ui.label("💡")
+                        ui.label("❓")
                             //.response
-                            .on_hover_text("Choose the desired area");
+                            .on_hover_text("Choose if you want to select a restricted area (Rectangle) or not (Fullscreen).");
                     //});
 
 
@@ -71,7 +70,7 @@ impl CaptureMode {
 
                         //checkbox con spinner per attivare e impostare delay
                         //ui.horizontal(|ui|{
-                            ui.colored_label(egui::Color32::WHITE, "Timer:");
+                            ui.label("Timer:");
                             ui.add(egui::Checkbox::new(&mut self.delay.delayed, "  "))
                                 .on_hover_text("To take a delayed screenshot");
                             if self.delay.delayed {
@@ -91,7 +90,7 @@ impl CaptureMode {
             if ui
                 .button("Acquire")
                 .on_hover_text(
-                    "After acquisition, the image is automatically copied to the clipboard",
+                    "After acquisition, the image can automatically copied to the clipboard",
                 )
                 .clicked()
             {
@@ -118,7 +117,7 @@ impl CaptureMode {
         ctx: &egui::Context,
     ) {
         //ui.horizontal(|ui| {
-            ui.colored_label(egui::Color32::WHITE, "Screen:");
+            ui.label("Screen:");
             egui::ComboBox::from_label(" ") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
                 .selected_text(format!(
                     "{:?}",

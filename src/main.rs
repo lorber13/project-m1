@@ -1,4 +1,4 @@
-mod edit_image_utils;
+
 mod gui;
 mod hotkeys;
 mod image_coding;

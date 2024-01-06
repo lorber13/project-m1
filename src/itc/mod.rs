@@ -1,3 +1,5 @@
+/*Definizione di enum usate nelle interfacce di comunicazione tra diversi moduli.*/
+
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ScreenshotDim {
@@ -19,6 +21,7 @@ pub enum SettingsEvent {
     Saved,
     Aborted,
     Nil,
+    OpenDirectoryDialog
 }
 
 #[derive(Clone, Copy)]

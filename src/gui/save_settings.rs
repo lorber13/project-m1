@@ -7,6 +7,11 @@ use std::cell::RefCell;
 use super::file_dialog;
 use std::rc::Rc;
 use std::cell::Cell;
+use crate::image_coding::ImageFormat;
+use std::path::PathBuf;
+use crate::DEBUG;
+use std::io::Write;
+use std::sync::mpsc::{channel, Receiver};
 
 
 #[derive(Clone)]
@@ -78,6 +83,84 @@ impl SaveSettings
             }
     }
 
+    /// Controlla quali sono le impostazioni di salvataggio di default attualmente in uso. Sia la directory di default che il
+    /// nome di default possono essere abilitati o disabilitati, quindi esistono quattro possibili casistiche:<br>
+    ///
+    /// (default_dir, default_name) =
+    /// - <i>(Some(..), Some(..))</i>: non è necessario mostrare all'user nessun file dialog perchè il path di salvataggio è
+    ///     già conosciuto;
+    /// - <i>(None, Some(..))</i>: viene mostrato un directory dialog;
+    /// - <i>(Some(..), None)</i>: viene mostrato un file dialog che di default apre la default_dir, ma potenzialmente l'user
+    ///     potrebbe modificare a piacere la cartella di salvataggio in questa fase;
+    /// - <i>(None, None)</i>: viene mostrato un file dialog che di default apre la cartella root.
+    ///
+    /// Se l'user conferma l'operazione di selezione tramite file dialog, oppure se si è presentata la prima situazione sopra
+    /// descritta, il metodo avvia il thread che realizza il salvataggio al path ottenuto. Poi, memorizza nello stato corrente
+    /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread. Lo stato cambia quindi in <i>EnumGuiState::Saving</i>.<br>
+    ///
+    /// Se l'user annulla l'operazione di selezione tramite file dialog, la gui continua a mostrare la schermata EditImage.
+    pub fn compose_output_file_path(&self, format: ImageFormat) -> Receiver<Option<PathBuf>> {
+
+        let dd_opt = self.get_default_dir();
+        let dn_opt = self.get_default_name();
+        let (tx, rx) = channel();
+        std::thread::spawn(move||{
+            match (dd_opt, dn_opt) {
+                (Some(dp), Some(dn)) => {
+                    let mut pb = PathBuf::from(dp);
+                    let ext: &str = format.into();
+                    pb.push("temp");
+                    pb.set_file_name(dn);
+                    pb.set_extension(ext);
+                    let _ = tx.send(Some(pb));
+                    return;
+                }
+    
+                (None, Some(dn)) => {
+                    let dir_opt = file_dialog::show_directory_dialog(None);
+                    if let Some(mut pb) = dir_opt {
+                        if DEBUG {
+                            let _ = writeln!(
+                                std::io::stdout(),
+                                "DEBUG: dir picker return = {}",
+                                pb.display()
+                            );
+                        }
+    
+                        let ext: &str = format.into();
+                        pb.set_file_name(dn);
+                        pb.set_extension(ext);
+                        let _ = tx.send(Some(pb));
+                        return;
+                    }
+                },
+    
+                (Some(dp), None) => {
+                    let dir_opt = file_dialog::show_save_dialog(format, Some(dp));
+                    if let Some(mut pb) = dir_opt {
+                        let ext: &str = format.into();
+                        pb.set_extension(ext);
+                        let _ = tx.send(Some(pb));
+                        return;
+                    }
+                },
+    
+                (None, None) => {
+                    let dir_opt = file_dialog::show_save_dialog(format, None);
+                    if let Some(mut pb) = dir_opt {
+                        let ext: &str = format.into();
+                        pb.set_extension(ext);
+                        let _ = tx.send(Some(pb));
+                        return;
+                    }
+                }
+            }
+            let _ = tx.send(None);
+        });
+
+        rx
+    }
+
     /// Mostra, all'interno di una ScrollArea orizzontale, una schermata divisa in quattro sezioni:
     /// 1. form relativo alla directory di default;
     /// 2. form relativo al nome di default;
@@ -105,7 +188,7 @@ impl SaveSettings
         ScrollArea::new([true, false]).show(ui, |ui|
         {
             ui.separator();
-            ui.label(eframe::egui::RichText::new("Save settings").color(eframe::egui::Color32::WHITE).heading());
+            ui.label(eframe::egui::RichText::new("Save settings").heading());
             ui.separator();
             ui.add(egui::Checkbox::new(&mut self.default_dir.enabled, "Save all screenshot in a default directory"));
             ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
@@ -116,11 +199,7 @@ impl SaveSettings
                             ui.add(egui::TextEdit::singleline(&mut self.default_dir.path));
                             if ui.button("📁").clicked()
                             {
-                                match file_dialog::show_directory_dialog(Some(&self.default_dir.path))
-                                {
-                                    None => (),
-                                    Some(pb) => self.default_dir.path = String::from(pb.to_str().unwrap())
-                                }
+                                ret = SettingsEvent::OpenDirectoryDialog;
                             }
                         });
             });
@@ -243,5 +322,13 @@ impl SaveSettings
         }
 
         
+    }
+
+    pub fn set_default_directory(&mut self, dir: String)
+    {
+        if self.default_dir.enabled {
+            if crate::DEBUG { println!("\nsetting default dir: {}", dir); }       
+            self.default_dir.path = dir;
+        }   
     }
 }
