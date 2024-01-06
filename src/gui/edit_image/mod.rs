@@ -383,8 +383,8 @@ impl EditImage {
             Tool::Cut { modifying } => {
                 match modifying {
                     ModificationOfRectangle::Move => {
+                        ctx.set_cursor_icon(CursorIcon::Grabbing);
                         if response.dragged() {
-                            ctx.set_cursor_icon(CursorIcon::Grabbing);
                             // todo: work in painter dimensions, not real dimensions
                             // todo: refine the function that makes the rectangle not escape borders
                             self.translate_rect(&response);
@@ -393,8 +393,8 @@ impl EditImage {
                         }
                     }
                     ModificationOfRectangle::Resize { direction } => {
+                        set_cursor(direction, ctx);
                         if response.dragged() {
-                            set_cursor(direction, ctx);
                             self.cut_rect = resize_rectangle(
                                 self.cut_rect,
                                 ctx.pointer_hover_pos().expect("should be defined"),
