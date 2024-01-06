@@ -170,7 +170,7 @@ pub fn create_circle(
 ) -> Shape {
     let center = start_drag;
     let radius = start_drag.distance(end_drag);
-    let circle = if filled {
+    if filled {
         Shape::Circle(CircleShape::filled(
             unscaled_point(top_left, scale_ratio, center),
             radius / scale_ratio,
@@ -182,8 +182,7 @@ pub fn create_circle(
             radius / scale_ratio,
             Stroke::new(stroke.width / scale_ratio, stroke.color),
         ))
-    };
-    circle
+    }
 }
 
 /// crea un rettangolo (colorato o solo bordo) in scala rispetto alle dimensioni effettive dell'immagine
