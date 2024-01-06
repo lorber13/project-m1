@@ -72,7 +72,7 @@ impl MainMenu {
                 ui.horizontal(|ui| {
                     ui.menu_button("☰", |ui| {
                         ui.vertical(|ui| {
-                            if ui.button("Capture").clicked() {
+                            if ui.button("Home").clicked() {
                                 ui.close_menu();
                                 self.switch_to_main_window(frame);
                             }

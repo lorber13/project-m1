@@ -332,3 +332,47 @@ impl SaveSettings
         }   
     }
 }
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    fn create_ss() -> SaveSettings
+    {
+        let _ = std::fs::remove_dir("./dd");
+        std::fs::create_dir("./dd").unwrap();
+        let mut ss = SaveSettings::new(Rc::new(RefCell::new(None)));
+        ss.default_dir = DefaultDir{path: PathBuf::from("dd").to_str().unwrap().to_string(), enabled: true};
+        ss.default_name = DefaultName{enabled: true, name: "dn".to_string(), mode: Cell::new(DefaultNameMode::OnlyName)};
+        ss
+    }
+
+    #[test]
+    fn compose_output_file_path_test()
+    {
+        let ss = create_ss();
+
+        let res = ss.compose_output_file_path(ImageFormat::GIF).recv().unwrap();
+        if let Some(path) = res
+        {
+            assert!(path.extension().unwrap().to_str().unwrap() == "Gif");
+            assert!(path.file_name().unwrap().to_str().unwrap() == "dn.Gif");
+            assert!(path.starts_with("dd"));
+        }else {
+            assert!(res.is_some());
+        }
+
+        std::fs::remove_dir("./dd").unwrap();
+    }
+
+    #[test]
+    fn get_default_name_test()
+    {
+        let mut ss = create_ss();
+        ss.default_name.mode = Cell::new(DefaultNameMode::Counter(0));
+        assert!(ss.get_default_name().unwrap() == "dn0");
+        assert!(ss.get_default_name().unwrap() == "dn1");
+        assert!(ss.get_default_name().unwrap() == "dn2");
+    }
+}

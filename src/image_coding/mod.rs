@@ -144,6 +144,8 @@ fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageRe
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     #[test]
     fn copy_clipboard_test() {
         let img = image::ImageBuffer::new(0, 0);
@@ -159,5 +161,6 @@ mod tests {
             img,
         );
         assert!(r.recv().is_ok());
+        assert!(PathBuf::from("./test.png").exists());
     }
 }
