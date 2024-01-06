@@ -545,7 +545,10 @@ impl EditImage {
         }
         match (&self.current_tool, self.fill_shape) {
             (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
-                color_picker::color_edit_button_srgba(ui, &mut self.stroke.color, Alpha::Opaque);
+                ui.horizontal(|ui| {
+                    ui.label("Color:");
+                    color_picker::color_edit_button_srgba(ui, &mut self.stroke.color, Alpha::Opaque);
+                });
             }
             (Tool::Rect { .. } | Tool::Circle { .. }, false)
             | (Tool::Pen { .. } | Tool::Arrow { .. }, _) => {

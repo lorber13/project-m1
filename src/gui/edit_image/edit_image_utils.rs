@@ -144,10 +144,10 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
 pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { width, color } = stroke;
     ui.horizontal(|ui| {
-        ui.label("Color");
+        ui.label("Color:");
         color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
 
-        ui.label("Width");
+        ui.label("Width:");
         ui.add(DragValue::new(width).speed(0.1).clamp_range(1.0..=5.0))
             .on_hover_text("Width");
         // stroke preview:
