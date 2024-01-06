@@ -443,30 +443,7 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
 pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<RgbaImage>) {
     match annotation {
         Shape::Rect(rect_shape) => {
-            draw_filled_rect_mut(
-                image_blend,
-                imageproc::rect::Rect::at(
-                    rect_shape.rect.left_top().x as i32,
-                    rect_shape.rect.left_top().y as i32,
-                )
-                .of_size(
-                    rect_shape.rect.width() as u32,
-                    rect_shape.rect.height() as u32,
-                ),
-                Rgba(rect_shape.fill.to_array()),
-            );
-            draw_hollow_rect_mut(
-                image_blend,
-                imageproc::rect::Rect::at(
-                    rect_shape.rect.left_top().x as i32,
-                    rect_shape.rect.left_top().y as i32,
-                )
-                .of_size(
-                    rect_shape.rect.width() as u32,
-                    rect_shape.rect.height() as u32,
-                ),
-                Rgba(rect_shape.stroke.color.to_array()),
-            );
+            write_rectangle_with_width(image_blend, rect_shape);
         }
         Shape::Path(path_shape) => {
             for segment in path_shape
@@ -491,21 +468,54 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
             Rgba(stroke.color.to_array()),
         ),
         Shape::Circle(circle_shape) => {
-            draw_filled_circle_mut(
-                image_blend,
-                (circle_shape.center.x as i32, circle_shape.center.y as i32),
-                circle_shape.radius as i32,
-                Rgba::from(circle_shape.fill.to_array()),
-            );
-            draw_hollow_circle_mut(
-                image_blend,
-                (circle_shape.center.x as i32, circle_shape.center.y as i32),
-                circle_shape.radius as i32,
-                Rgba(circle_shape.stroke.color.to_array()),
-            )
+            write_circle_with_width(image_blend, circle_shape);
         }
         _ => {
             unreachable!("These are the only shapes which have to be used")
         }
+    }
+}
+
+pub fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
+    draw_filled_rect_mut(
+        image_blend,
+        imageproc::rect::Rect::at(
+            rect_shape.rect.left_top().x as i32,
+            rect_shape.rect.left_top().y as i32,
+        )
+        .of_size(
+            rect_shape.rect.width() as u32,
+            rect_shape.rect.height() as u32,
+        ),
+        Rgba(rect_shape.fill.to_array()),
+    );
+    let big_rect = rect_shape.rect.expand(rect_shape.stroke.width / 2.0);
+    for delta in 0..rect_shape.stroke.width as i32 {
+        let rect = big_rect.shrink(delta as f32);
+        draw_hollow_rect_mut(
+            image_blend,
+            imageproc::rect::Rect::at(rect.left_top().x as i32, rect.left_top().y as i32)
+                .of_size(rect.width() as u32, rect.height() as u32),
+            Rgba(rect_shape.stroke.color.to_array()),
+        );
+    }
+}
+
+pub fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &CircleShape) {
+    draw_filled_circle_mut(
+        image_blend,
+        (circle_shape.center.x as i32, circle_shape.center.y as i32),
+        circle_shape.radius as i32,
+        Rgba::from(circle_shape.fill.to_array()),
+    );
+    let interval = (circle_shape.radius - circle_shape.stroke.width / 2.0) as i32
+        ..(circle_shape.radius + circle_shape.stroke.width / 2.0) as i32;
+    for radius in interval {
+        draw_hollow_circle_mut(
+            image_blend,
+            (circle_shape.center.x as i32, circle_shape.center.y as i32),
+            radius,
+            Rgba(circle_shape.stroke.color.to_array()),
+        )
     }
 }
