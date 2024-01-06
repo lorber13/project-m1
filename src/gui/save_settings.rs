@@ -109,6 +109,7 @@ impl SaveSettings
                 (Some(dp), Some(dn)) => {
                     let mut pb = PathBuf::from(dp);
                     let ext: &str = format.into();
+                    pb.push("temp");
                     pb.set_file_name(dn);
                     pb.set_extension(ext);
                     let _ = tx.send(Some(pb));
@@ -198,11 +199,7 @@ impl SaveSettings
                             ui.add(egui::TextEdit::singleline(&mut self.default_dir.path));
                             if ui.button("📁").clicked()
                             {
-                                match file_dialog::show_directory_dialog(Some(&self.default_dir.path))
-                                {
-                                    None => (),
-                                    Some(pb) => self.default_dir.path = String::from(pb.to_str().unwrap())
-                                }
+                                ret = SettingsEvent::OpenDirectoryDialog;
                             }
                         });
             });
@@ -325,5 +322,13 @@ impl SaveSettings
         }
 
         
+    }
+
+    pub fn set_default_directory(&mut self, dir: String)
+    {
+        if self.default_dir.enabled {
+            if crate::DEBUG { println!("\nsetting default dir: {}", dir); }       
+            self.default_dir.path = dir;
+        }   
     }
 }

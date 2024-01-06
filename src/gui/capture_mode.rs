@@ -90,7 +90,7 @@ impl CaptureMode {
             if ui
                 .button("Acquire")
                 .on_hover_text(
-                    "After acquisition, the image is automatically copied to the clipboard",
+                    "After acquisition, the image can automatically copied to the clipboard",
                 )
                 .clicked()
             {

@@ -21,6 +21,7 @@ pub enum SettingsEvent {
     Saved,
     Aborted,
     Nil,
+    OpenDirectoryDialog
 }
 
 #[derive(Clone, Copy)]

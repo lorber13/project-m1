@@ -6,6 +6,7 @@ use crate::{
     screens_manager::ScreensManager,
 };
 use eframe::egui::{CentralPanel, Context, Ui};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 use std::{
@@ -15,6 +16,7 @@ use std::{
 
 pub enum MainMenuEvent {
     ScreenshotRequest(ScreenshotDim, f64),
+    OpenDirectoryDialog,
     Nil,
 }
 /// Enum che descrive che cosa viene mostrato di fianco al bottone del menu'.
@@ -96,7 +98,7 @@ impl MainMenu {
                                 ret = self.show_main_window(ui, ctx, frame);
                             }
                             MainMenuState::SaveSettings(..) => {
-                                self.show_save_settings(ui, frame);
+                                ret = self.show_save_settings(ui, frame);
                             }
                             MainMenuState::HotkeysSettings(..) => {
                                 self.show_hotkeys_settings(ui, frame);
@@ -177,7 +179,7 @@ impl MainMenu {
     ///
     /// <h3>Panics:</h3>
     /// Se <i>self.state</i> è diverso da <i>MainMenuState::SaveSettings</i>.
-    fn show_save_settings(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+    fn show_save_settings(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) -> MainMenuEvent {
         if let MainMenuState::SaveSettings(ss) = &mut self.state {
             match ss.update(ui) {
                 SettingsEvent::Saved => {
@@ -188,9 +190,41 @@ impl MainMenu {
                     self.switch_to_main_window(frame);
                 }
                 SettingsEvent::Nil => (),
+                SettingsEvent::OpenDirectoryDialog => return MainMenuEvent::OpenDirectoryDialog
             }
         } else {
             unreachable!();
+        }
+
+        MainMenuEvent::Nil
+    }
+
+    pub fn wait_directory_dialog(&mut self, directory_dialog_receiver: &mut Option<Receiver<Option<PathBuf>>>)
+    {
+        if let Some(rx) = directory_dialog_receiver
+        {
+            match rx.try_recv() 
+            {
+                //L'utente ha chiuso il file dialog (premendo su save o su cancel):
+                Ok(opt) => 
+                {
+                    if let Some(p) = opt {
+                        if let MainMenuState::SaveSettings(ss) = &mut self.state 
+                        {
+                            ss.set_default_directory(p.to_str().unwrap().to_string());
+                        }
+                    }
+                    let _ = directory_dialog_receiver.take();
+                },
+                //L'utente non ha ancora chiuso il file dialog:
+                Err(TryRecvError::Empty) => (),
+                //Si è verificato un errore e il canale di comunicazione si è chiuso:
+                Err(TryRecvError::Disconnected) =>
+                {
+                    self.alert.borrow_mut().replace("Error. Changes not applyed.".to_string());
+                    let _ = directory_dialog_receiver.take();
+                }
+            }
         }
     }
 
@@ -263,6 +297,7 @@ impl MainMenu {
                     self.switch_to_main_window(frame);
                 }
                 SettingsEvent::Nil => (),
+                SettingsEvent::OpenDirectoryDialog => {unreachable!("Impossible to open directory dialog from hotkey settings");}
             }
         } else {
             unreachable!();

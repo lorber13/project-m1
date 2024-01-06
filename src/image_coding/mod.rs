@@ -15,7 +15,8 @@ use crate::DEBUG;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum ImageFormat {
+pub enum ImageFormat {
+
     Png,
     JPEG,
     GIF,
@@ -97,8 +98,9 @@ fn crop_image(rect: Rect, img: RgbaImage) -> RgbaImage {
 pub fn start_thread_save_image(
     path: std::path::PathBuf,
     img: RgbaImage,
-) -> Receiver<image::ImageResult<()>> {
+) -> Receiver<Result<String, ImageError>> {
     let (tx, rx) = channel();
+    let path_str = path.as_os_str().to_str().unwrap().to_string();
     std::thread::spawn(move || {
         if DEBUG {
             let _ = writeln!(
@@ -108,7 +110,8 @@ pub fn start_thread_save_image(
             );
         }
 
-        let _ = tx.send(save_image(path, img));
+        let _ = tx.send(save_image(path, img)
+                        .map_or_else(|res| Err(res), |()| Ok(path_str)));
     });
     rx
 }
