@@ -428,7 +428,7 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
         }
         Shape::Path(path_shape) => {
             path_shape.stroke.width *= scale_ratio;
-            for point in path_shape.points.iter_mut() {
+            for point in &mut path_shape.points {
                 *point = scaled_point(top_left, scale_ratio, *point);
             }
         }
@@ -457,7 +457,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
                         image_blend,
                         &polygon_points,
                         Rgba(path_shape.stroke.color.to_array()),
-                    )
+                    );
                 }
             }
         }
@@ -515,6 +515,6 @@ fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &Ci
             (circle_shape.center.x as i32, circle_shape.center.y as i32),
             radius,
             Rgba(circle_shape.stroke.color.to_array()),
-        )
+        );
     }
 }

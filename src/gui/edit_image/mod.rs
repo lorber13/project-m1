@@ -24,7 +24,7 @@ use std::thread;
 /// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
 /// Lo stato Aborted indica che e' stato premuto il pulsante Abort
 /// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
-/// (RgbaImage), e il suo formato (ImageFormat)
+/// (`RgbaImage`), e il suo formato (`ImageFormat`)
 pub enum EditImageEvent {
     Saved {
         image: RgbaImage,
@@ -222,7 +222,7 @@ impl EditImage {
     /// disegna le annotazioni precedenti (tutte quelle che non stanno venendo disegnate al frame corrente)
     fn draw_previous_annotations(&mut self, painter: &Painter) {
         let mut annotations = self.annotations.clone();
-        for annotation in annotations.iter_mut() {
+        for annotation in &mut annotations {
             scale_annotation(annotation, self.scale_ratio, painter.clip_rect().left_top());
         }
         painter.extend(annotations);
@@ -270,7 +270,7 @@ impl EditImage {
                             let ret = self.draw_menu_buttons(ui);
                             ui.separator();
                             let (response, painter) = self.allocate_scaled_painter(ui);
-                            self.handle_events(ctx, response, painter.clip_rect());
+                            self.handle_events(ctx, &response, painter.clip_rect());
                             self.display_annotations(&painter);
                             ret
                         })
@@ -284,7 +284,7 @@ impl EditImage {
     /// gestisce lo stato dell'applicazione sulla base degli eventi che accadono al frame corrente. In base al tool in
     /// uso, viene aggiornato lo stato dell'annotazione che sta venendo disegnata. Se si tratta per esempio di una
     /// linea, viene allungata aggiungendo la posizione del cursore al frame corrente.
-    fn handle_events(&mut self, ctx: &Context, response: Response, painter_rect: Rect) {
+    fn handle_events(&mut self, ctx: &Context, response: &Response, painter_rect: Rect) {
         self.handle_ctrl_z(ctx);
         match &mut self.current_tool {
             Tool::Pen { line } => {
@@ -387,7 +387,7 @@ impl EditImage {
                         if response.dragged() {
                             // todo: work in painter dimensions, not real dimensions
                             // todo: refine the function that makes the rectangle not escape borders
-                            self.translate_rect(&response);
+                            self.translate_rect(response);
                         } else if response.drag_released() {
                             *modifying = ModificationOfRectangle::NoModification;
                         }
@@ -450,11 +450,9 @@ impl EditImage {
 
     fn remove_annotation(&mut self) {
         let annotation = self.annotations.pop();
-        if let Some(annotation) = annotation {
-            if let Shape::LineSegment { .. } = annotation {
-                self.annotations.pop();
-                self.annotations.pop();
-            }
+        if let Some(Shape::LineSegment { .. }) = annotation {
+            self.annotations.pop();
+            self.annotations.pop();
         }
     }
 
@@ -556,7 +554,11 @@ impl EditImage {
             (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
                 ui.horizontal(|ui| {
                     ui.label("Color:");
-                    color_picker::color_edit_button_srgba(ui, &mut self.stroke.color, Alpha::Opaque);
+                    color_picker::color_edit_button_srgba(
+                        ui,
+                        &mut self.stroke.color,
+                        Alpha::Opaque,
+                    );
                 });
             }
             (Tool::Rect { .. } | Tool::Circle { .. }, false)
