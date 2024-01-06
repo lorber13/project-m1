@@ -444,7 +444,17 @@ impl EditImage {
 
     fn handle_ctrl_z(&mut self, ctx: &Context) {
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(Key::Z)) {
-            self.annotations.pop();
+            self.remove_annotation();
+        }
+    }
+
+    fn remove_annotation(&mut self) {
+        let annotation = self.annotations.pop();
+        if let Some(annotation) = annotation {
+            if let Shape::LineSegment { .. } = annotation {
+                self.annotations.pop();
+                self.annotations.pop();
+            }
         }
     }
 
@@ -484,7 +494,6 @@ impl EditImage {
     /// disegna i bottoni principali dell'interfaccia
     fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
         ui.horizontal(|ui| {
-            // todo: when the button is pressed, the enum is initialized, but the button does not keep being selected when the internal state of the enum changes
             ui.label("Tool:");
             if ui
                 .selectable_label(matches!(self.current_tool, Tool::Rect { .. }), "rectangle")
@@ -529,7 +538,7 @@ impl EditImage {
             }
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                 if ui.button("undo").clicked() {
-                    self.annotations.pop();
+                    self.remove_annotation();
                 }
                 if ui.button("clear").clicked() {
                     self.annotations = Vec::new();
