@@ -476,7 +476,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
     }
 }
 
-pub fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
+fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
     draw_filled_rect_mut(
         image_blend,
         imageproc::rect::Rect::at(
@@ -501,7 +501,7 @@ pub fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape
     }
 }
 
-pub fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &CircleShape) {
+fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &CircleShape) {
     draw_filled_circle_mut(
         image_blend,
         (circle_shape.center.x as i32, circle_shape.center.y as i32),

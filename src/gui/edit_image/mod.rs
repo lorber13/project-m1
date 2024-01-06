@@ -1,16 +1,17 @@
 pub mod edit_image_utils;
 
+use crate::gui::loading::show_loading;
+use crate::image_coding::ImageFormat;
 use edit_image_utils::{
     create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
     push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
     stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
 };
-use crate::gui::loading::show_loading;
-use crate::image_coding::ImageFormat;
 use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
-    color_picker, pos2, vec2, CentralPanel, Color32, ColorImage, Context, Painter, Pos2, Rect,
-    Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions, Ui, Vec2,
+    color_picker, pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, Key, Layout,
+    Painter, Pos2, Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions,
+    Ui, Vec2,
 };
 use eframe::egui::{ComboBox, CursorIcon};
 use image::imageops::crop_imm;
@@ -284,6 +285,7 @@ impl EditImage {
     /// uso, viene aggiornato lo stato dell'annotazione che sta venendo disegnata. Se si tratta per esempio di una
     /// linea, viene allungata aggiungendo la posizione del cursore al frame corrente.
     fn handle_events(&mut self, ctx: &Context, response: Response, painter_rect: Rect) {
+        self.handle_ctrl_z(ctx);
         match &mut self.current_tool {
             Tool::Pen { line } => {
                 if response.drag_started() {
@@ -440,6 +442,12 @@ impl EditImage {
         }
     }
 
+    fn handle_ctrl_z(&mut self, ctx: &Context) {
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(Key::Z)) {
+            self.annotations.pop();
+        }
+    }
+
     /// trasla il rettangolo di ritaglio. Se il rettangolo di ritaglio viene portato fuori dai bordi, viene ritraslato
     /// automaticamente sul bordo piu' vicino
     fn translate_rect(&mut self, response: &Response) {
@@ -475,8 +483,9 @@ impl EditImage {
 
     /// disegna i bottoni principali dell'interfaccia
     fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
-        ui.horizontal_top(|ui| {
+        ui.horizontal(|ui| {
             // todo: when the button is pressed, the enum is initialized, but the button does not keep being selected when the internal state of the enum changes
+            ui.label("Tool:");
             if ui
                 .selectable_label(matches!(self.current_tool, Tool::Rect { .. }), "rectangle")
                 .clicked()
@@ -518,25 +527,34 @@ impl EditImage {
                     modifying: ModificationOfRectangle::NoModification,
                 };
             }
-            if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
+            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                if ui.button("undo").clicked() {
+                    self.annotations.pop();
+                }
+                if ui.button("clear").clicked() {
+                    self.annotations = Vec::new();
+                }
+            });
+        });
+        if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
+            ui.horizontal(|ui| {
+                ui.label("Shape:");
                 ui.selectable_value(&mut self.fill_shape, true, "filled");
                 ui.selectable_value(&mut self.fill_shape, false, "border");
+            });
+        }
+        match (&self.current_tool, self.fill_shape) {
+            (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
+                color_picker::color_edit_button_srgba(ui, &mut self.stroke.color, Alpha::Opaque);
             }
-            match (&self.current_tool, self.fill_shape) {
-                (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
-                    color_picker::color_edit_button_srgba(
-                        ui,
-                        &mut self.stroke.color,
-                        Alpha::Opaque,
-                    );
-                }
-                (Tool::Rect { .. } | Tool::Circle { .. }, false)
-                | (Tool::Pen { .. } | Tool::Arrow { .. }, _) => {
-                    stroke_ui_opaque(ui, &mut self.stroke);
-                }
-                (Tool::Cut { .. }, _) => {}
+            (Tool::Rect { .. } | Tool::Circle { .. }, false)
+            | (Tool::Pen { .. } | Tool::Arrow { .. }, _) => {
+                stroke_ui_opaque(ui, &mut self.stroke);
             }
-
+            (Tool::Cut { .. }, _) => {}
+        }
+        ui.horizontal(|ui| {
+            ui.label("Format:");
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
@@ -544,34 +562,37 @@ impl EditImage {
                     ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
                     ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
                 });
-            if ui.button("Save").clicked() {
-                let (tx, rx) = channel();
-                self.receive_thread = rx;
-                let annotations = self.annotations.clone();
-                let image = self.image.clone();
-                let cut_rect = self.cut_rect;
-                thread::spawn(move || {
-                    let mut image_blend = Blend(image);
-                    for annotation in annotations {
-                        write_annotation_to_image(&annotation, &mut image_blend);
-                    }
-                    tx.send(
-                        crop_imm(
-                            &image_blend.0,
-                            cut_rect.left_top().x as u32,
-                            cut_rect.left_top().y as u32,
-                            cut_rect.width() as u32,
-                            cut_rect.height() as u32,
+            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                if ui.button("Abort").clicked() {
+                    EditImageEvent::Aborted
+                } else if ui.button("Save").clicked() {
+                    let (tx, rx) = channel();
+                    self.receive_thread = rx;
+                    let annotations = self.annotations.clone();
+                    let image = self.image.clone();
+                    let cut_rect = self.cut_rect;
+                    thread::spawn(move || {
+                        let mut image_blend = Blend(image);
+                        for annotation in annotations {
+                            write_annotation_to_image(&annotation, &mut image_blend);
+                        }
+                        tx.send(
+                            crop_imm(
+                                &image_blend.0,
+                                cut_rect.left_top().x as u32,
+                                cut_rect.left_top().y as u32,
+                                cut_rect.width() as u32,
+                                cut_rect.height() as u32,
+                            )
+                            .to_image(),
                         )
-                        .to_image(),
-                    )
-                });
-                EditImageEvent::Nil
-            } else if ui.button("Abort").clicked() {
-                EditImageEvent::Aborted
-            } else {
-                EditImageEvent::Nil
-            }
+                    });
+                    EditImageEvent::Nil
+                } else {
+                    EditImageEvent::Nil
+                }
+            })
+            .inner
         })
         .inner
     }
