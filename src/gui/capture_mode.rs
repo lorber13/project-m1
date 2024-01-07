@@ -126,34 +126,41 @@ impl CaptureMode {
                 .show_ui(ui, |ui| {
                     ui.style_mut().wrap = Some(false);
                     ui.set_min_width(60.0);
-                    for (i, s) in screens_manager.get_screens().iter().enumerate() {
-                        let di = s.0.display_info;
-                        let str = format!("{} ({}x{})", i + 1, di.width, di.height);
-
-                        ui.horizontal(|ui| {
-                            if let Ok(guard) = s.1.try_lock() {
-                                if let Some(rgba) = guard.clone() {
-                                    let txt = ctx.load_texture(
-                                        "icon",
-                                        ColorImage::from_rgba_unmultiplied(
-                                            [rgba.width() as usize, rgba.height() as usize],
-                                            rgba.as_raw(),
-                                        ),
-                                        Default::default(),
-                                    );
-                                    ui.image(txt.id(), txt.size_vec2());
-                                } else {
-                                    ui.spinner();
-                                }
-                            } else {
-                                ui.spinner();
+                    match screens_manager.try_get_screens() {
+                        Some(g) => 
+                        {
+                            for (i, s) in g.iter().enumerate() {
+                                let di = s.0.display_info;
+                                let str = format!("{} ({}x{})", i + 1, di.width, di.height);
+        
+                                ui.horizontal(|ui| {
+                                    if let Ok(guard) = s.1.try_lock() {
+                                        if let Some(rgba) = guard.clone() {
+                                            let txt = ctx.load_texture(
+                                                "icon",
+                                                ColorImage::from_rgba_unmultiplied(
+                                                    [rgba.width() as usize, rgba.height() as usize],
+                                                    rgba.as_raw(),
+                                                ),
+                                                Default::default(),
+                                            );
+                                            ui.image(txt.id(), txt.size_vec2());
+                                        } else {
+                                            ui.spinner();
+                                        }
+                                    } else {
+                                        ui.spinner();
+                                    }
+        
+                                    let mut curr = screens_manager.get_current_screen_index();
+                                    ui.selectable_value(&mut curr, i, &str);
+                                    screens_manager.select_screen(curr);
+                                });
                             }
-
-                            let mut curr = screens_manager.get_current_screen_index();
-                            ui.selectable_value(&mut curr, i, &str);
-                            screens_manager.select_screen(curr);
-                        });
+                        },
+                        None =>  {ui.spinner();}
                     }
+                    
                 });
 
             if ui.button("↺").on_hover_text("Refresh").clicked() {

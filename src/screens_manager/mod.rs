@@ -10,9 +10,11 @@ Per praticità, il modulo mette a disposizione la possibilità di memorizzare qu
 use image::{imageops::FilterType, RgbaImage};
 use screenshots::{DisplayInfo, Screen};
 use std::io::Write;
+use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
-
+
+
 pub struct ScreensManager {
     ///Lista di schermi disponibili e relative icone.
     ///Incapsulata in un RwLock per poter:
@@ -26,7 +28,7 @@ pub struct ScreensManager {
     ///dell'utente. Sono incapsulate in Mutex per permettere la parallelizzazione dell'operazione di creazione delle icone di
     ///tutti gli schermi collegati (utile perchè, in quanto operazioni con le immagini,si tratta di computazione onerosa, ma il modulo è disegnato per
     ///essere scalabile nel numero di schermi).
-    pub screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
+    screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
     ///Indice che fa riferimento al vettore <i>self::screens</i>
     curr_screen_index: RwLock<usize>,
     ///Larghezza delle icone che verranno prodotte da <i>self::load_icons()</i>.
@@ -122,11 +124,12 @@ impl ScreensManager {
     ///Oppure invia sul canale un messaggio di errore.
     pub fn start_thread_fullscreen_screenshot(
         self: &Arc<Self>,
+        delay: Duration, 
     ) -> Receiver<Result<RgbaImage, &'static str>> {
         let (tx, rx) = channel();
         let sc = self.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs_f64(0.25));
+            std::thread::sleep(delay);
             tx.send(sc.fullscreen_screenshot()).expect(
                 "thread performing fullscreen screenshot was not able to send throught the channel",
             );
@@ -197,7 +200,17 @@ impl ScreensManager {
         }
     }
 
-    pub fn get_screens<'a>(
+    pub fn try_get_screens<'a>(
+        self: &'a Arc<Self>,
+    ) -> Option<RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>>> {
+        match self.screens.try_read()
+        {
+            Ok(g) => Some(g),
+            Err(..) =>None
+        }
+    }
+
+    fn get_screens<'a>(
         self: &'a Arc<Self>,
     ) -> RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>> {
         self.screens.read().unwrap()

@@ -244,7 +244,7 @@ impl GlobalGuiState {
             println!("nframe (switch to rect selection): {}", ctx.frame_nr());
         }
         self.state = EnumGuiState::LoadingRectSelection(
-            self.screens_manager.start_thread_fullscreen_screenshot(),
+            self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
         );
     }
 
@@ -337,7 +337,7 @@ impl GlobalGuiState {
             frame.set_visible(false);
             ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(
-                self.screens_manager.start_thread_fullscreen_screenshot(),
+                self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
             );
         }
     }
