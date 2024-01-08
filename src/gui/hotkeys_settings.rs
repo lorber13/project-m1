@@ -29,7 +29,7 @@ impl PartialEq for HotkeySettingsState
 }
 
 /// Stato della parte della gui che visualizza la schermata di impostazione delle Hotkeys.<br>
-/// Si appoggia sul modulo RegisteredHotkeys: questa struct realizza la parte di gui per settare le hotkeys,
+/// Si appoggia sul modulo RegisteredHotkeys: la struct sottostante realizza la parte di gui per settare le hotkeys,
 /// registrando le modifiche attraverso RegisteredHotkeys.
 #[derive(Clone)]
 pub struct HotkeysSettings
