@@ -251,7 +251,6 @@ impl EditImage {
     pub fn update(
         &mut self,
         ctx: &Context,
-        _frame: &mut eframe::Frame,
         enabled: bool,
     ) -> EditImageEvent {
         CentralPanel::default()

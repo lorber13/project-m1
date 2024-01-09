@@ -121,12 +121,12 @@ impl GlobalGuiState {
     }
 
     /// Modifica lo stato della macchina a stati in <i>EnumGuistate::MainMenu</i>, in cui memorizza una nuova istanza di MainMenu.
-    fn switch_to_main_menu(&mut self, _frame: &mut eframe::Frame) {
-        _frame.set_decorations(true);
-        _frame.set_fullscreen(false);
-        _frame.set_maximized(false);
-        _frame.set_window_size(eframe::egui::Vec2::new(500.0, 300.0));
-        _frame.set_visible(true);
+    fn switch_to_main_menu(&mut self, frame: &mut eframe::Frame) {
+        frame.set_decorations(true);
+        frame.set_fullscreen(false);
+        frame.set_maximized(false);
+        frame.set_window_size(eframe::egui::Vec2::new(500.0, 300.0));
+        frame.set_visible(true);
         self.state = EnumGuiState::MainMenu(MainMenu::new(
             self.alert.clone(),
             self.screens_manager.clone(),
@@ -401,7 +401,7 @@ impl GlobalGuiState {
         enabled: bool,
     ) {
         if let EnumGuiState::EditImage(em) = &mut self.state {
-            match em.update(ctx, frame, enabled) {
+            match em.update(ctx, enabled) {
                 EditImageEvent::Saved { image, format } => {
                     self.manage_save_request(image, format);
                 }
