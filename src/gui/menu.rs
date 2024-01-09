@@ -242,7 +242,7 @@ impl MainMenu {
                 self.state = MainMenuState::LoadingHotkeysSettings(
                     self.registered_hotkeys.prepare_for_updates(),
                 )
-            } //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+            }
         }
     }
 
@@ -264,11 +264,12 @@ impl MainMenu {
                         self.alert.clone(),
                         self.registered_hotkeys.clone(),
                     ))
-                } //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+                }
                 Err(TryRecvError::Disconnected) => {
                     self.alert
                         .borrow_mut()
                         .replace("Loading failed".to_string());
+self.switch_to_main_window();
                 }
                 Err(TryRecvError::Empty) => loading::show_loading(ctx),
             }
