@@ -19,7 +19,7 @@ pub enum MainMenuEvent {
     OpenDirectoryDialog,
     Nil,
 }
-/// Enum che descrive che cosa viene mostrato di fianco al bottone del menu'.
+/// Enum che descrive che cosa viene mostrato di fianco al side menu.
 enum MainMenuState {
     CaptureMode(CaptureMode),
     SaveSettings(SaveSettings),
@@ -39,7 +39,7 @@ pub struct MainMenu {
 }
 
 impl MainMenu {
-    /// Riceve come parametri gli smartpointer a parte dello stato globale dell'applicazione per poterlo modificare direttamente.
+    /// Riceve come parametri gli smartpointer e parte dello stato globale dell'applicazione per poterlo modificare direttamente.
     pub fn new(
         alert: Rc<RefCell<Option<String>>>,
         screens_mgr: Arc<ScreensManager>,
