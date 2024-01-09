@@ -174,7 +174,9 @@ impl MainMenu {
     /// Gestisce così il valore di ritorno di SaveSettings::update():
     /// - SettingsEvent::Saved, aggiorna lo stato globale dell'applicazione, sostituendolo con l'istanza di SaveSettings
     ///     memorizzata nello stato corrente, poi cambia lo stato di MainMenu in MainMenu::CaptureMode;
-    /// - SettingsEvent::Aborted, e cambia lo stato di MainMenu in MainMenu::CaptureMode;
+    /// - SettingsEvent::Aborted, cambia lo stato di MainMenu in MainMenu::CaptureMode;
+    /// - SettingsEevent::OpenDirectoryDialog, ritorna MainMenuEvent::OpenDirectoryDialog per inoltrare la richiesta 
+    /// a GlobalGuiState
     /// - SettingsEvent::Nil, non fa nulla.
     ///
     /// <h3>Panics:</h3>
