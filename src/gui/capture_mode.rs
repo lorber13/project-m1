@@ -5,7 +5,7 @@ use super::super::itc::{Delay, ScreenshotDim};
 use eframe::egui::ColorImage;
 use std::sync::Arc;
 
-///Stato della parte di interfaccia con la funzione di selezionare la modalità di cattura e avviarla.
+///Stato della parte di interfaccia con la funzione di selezionare la modalità di cattura e avviarla. (schermata home)
 pub struct CaptureMode {
     area: ScreenshotDim,
     delay: Delay,
@@ -27,7 +27,7 @@ impl CaptureMode {
     /// - ScreenshotDim è la modalità di selezione dell'area coinvolta nello screenshot;<br>
     /// - f64 sono i secondi di delay impostati.<br>
     /// Non è necessario che il metodo ritorni anche indicazione sullo schermo selezionato,
-    /// perchè l'informazione viene già memorizzata dentro alla variabile di tipo Arc<ScreensManager>.
+    /// perchè l'informazione viene già memorizzata dentro alla variabile di tipo Arc<ScreensManager>, unica a livello di applicazione.
     pub fn update(
         &mut self,
         ui: &mut egui::Ui,
@@ -46,7 +46,6 @@ impl CaptureMode {
                     .num_columns(2)
                     .striped(true)
                     .show(ui, |ui| {
-                        // ui.horizontal(|ui| {
                         ui.label("Area:");
                         egui::ComboBox::from_label("") //menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
                             .selected_text(format!("{:?}", self.area))
@@ -57,7 +56,6 @@ impl CaptureMode {
                                 ui.selectable_value(&mut self.area, ScreenshotDim::Rectangle, "Rectangle");
                             });
                         ui.label("❓")
-                            //.response
                             .on_hover_text("Choose if you want to select a restricted area (Rectangle) or not (Fullscreen).");
                     //});
 
@@ -69,14 +67,13 @@ impl CaptureMode {
                         ui.end_row();
 
                         //checkbox con spinner per attivare e impostare delay
-                        //ui.horizontal(|ui|{
                             ui.label("Timer:");
                             ui.add(egui::Checkbox::new(&mut self.delay.delayed, "  "))
                                 .on_hover_text("To take a delayed screenshot");
                             if self.delay.delayed {
                                 ui.add(egui::Slider::new(&mut self.delay.scalar, 0.0..=5.0));
                             }
-                        //});
+             
 
 
                         ui.end_row();
@@ -85,12 +82,13 @@ impl CaptureMode {
 
 
             ui.add_space(30.0);
-            // gestione della pressione del pulsante "Acquire": la funzione ritorna Some(..) al posto di None
+           
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(0,140,250);
+// gestione della pressione del pulsante "Acquire": la funzione ritorna Some(..) al posto di None
             if ui
                 .button("Acquire")
                 .on_hover_text(
-                    "After acquisition, the image can automatically copied to the clipboard",
+                    "After acquisition, the image can be automatically copied to the clipboard",
                 )
                 .clicked()
             {
@@ -110,18 +108,20 @@ impl CaptureMode {
     /// Una selezione su questa combobox scatena la modifica dello screen che lo screen manager
     /// etichetta come "selected".<br>
     /// Esiste un bottone per chiedere il refresh dell'intera lista di screen allo screen manager.
+    /// Se la combobox viene aperta mentre la lista è ancora in aggiornamento, la chiamata a
+    ///<i>try_get_screens()</i>, che nasconde un <i>try_lock()</i>, fallisce: viene visualizzato uno spinner.
     fn screens_combobox(
         &self,
         ui: &mut egui::Ui,
         screens_manager: Arc<ScreensManager>,
         ctx: &egui::Context,
     ) {
-        //ui.horizontal(|ui| {
+        
             ui.label("Screen:");
-            egui::ComboBox::from_label(" ") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
+            egui::ComboBox::from_label(" ") 
                 .selected_text(format!(
                     "{:?}",
-                    screens_manager.get_current_screen_index() + 1
+                    screens_manager.get_current_screen_index() + 1  //per avere numerazione a partire da 1, più intuitiva per l'utente 
                 ))
                 .show_ui(ui, |ui| {
                     ui.style_mut().wrap = Some(false);
@@ -166,6 +166,6 @@ impl CaptureMode {
             if ui.button("↺").on_hover_text("Refresh").clicked() {
                 screens_manager.update_available_screens();
             }
-        //});
+        
     }
 }

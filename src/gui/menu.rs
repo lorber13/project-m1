@@ -19,7 +19,7 @@ pub enum MainMenuEvent {
     OpenDirectoryDialog,
     Nil,
 }
-/// Enum che descrive che cosa viene mostrato di fianco al bottone del menu'.
+/// Enum che descrive che cosa viene mostrato di fianco al side menu.
 enum MainMenuState {
     CaptureMode(CaptureMode),
     SaveSettings(SaveSettings),
@@ -39,7 +39,7 @@ pub struct MainMenu {
 }
 
 impl MainMenu {
-    /// Riceve come parametri gli smartpointer a parte dello stato globale dell'applicazione per poterlo modificare direttamente.
+    /// Riceve come parametri gli smartpointer e parte dello stato globale dell'applicazione per poterlo modificare direttamente.
     pub fn new(
         alert: Rc<RefCell<Option<String>>>,
         screens_mgr: Arc<ScreensManager>,
@@ -242,7 +242,7 @@ impl MainMenu {
                 self.state = MainMenuState::LoadingHotkeysSettings(
                     self.registered_hotkeys.prepare_for_updates(),
                 )
-            } //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+            }
         }
     }
 
@@ -264,11 +264,12 @@ impl MainMenu {
                         self.alert.clone(),
                         self.registered_hotkeys.clone(),
                     ))
-                } //viene modificata una copia delle attuali impostazioni, per poter fare rollback in caso di annullamento
+                }
                 Err(TryRecvError::Disconnected) => {
                     self.alert
                         .borrow_mut()
                         .replace("Loading failed".to_string());
+self.switch_to_main_window();
                 }
                 Err(TryRecvError::Empty) => loading::show_loading(ctx),
             }

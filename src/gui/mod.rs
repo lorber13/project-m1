@@ -1,13 +1,12 @@
 /*
 La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
-Questo modulo è disegnato per permettere al thread che esegue la gui di rimanere sempre in esecuzione,
-mostrando, a seconda delle necessità, una diversa finestra tra quelle elencate nella enum EnumGuiState.
+Questo modulo è disegnato per permettere al thread che esegue la gui di non iniziare mai attese bloccanti.
 
 La gui è quindi basata su una macchina a stati e le varianti della EnumGuiState incapsulano le variabili
 con i dettagli di ciascuno stato.
 In particolare, se una variante incapsula un Receiver, allora essa rappresenta uno stato di attesa
 della gui, che fa busy waiting con try_recv(). Si noti che il design della sincronizzazione con altri
-thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento dell'event loop della gui.
+thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento dell'event loop della gui, che continua a ridisegnarsi.
 
 Lo stato della gui è memorizzato dentro la struct GlobalGuiState assieme ad altre informazioni globali.
  */
@@ -82,7 +81,7 @@ pub struct GlobalGuiState {
     screens_manager: Arc<screens_manager::ScreensManager>,
     /// Impostazioni di salvataggio automatico delle immagini.
     save_settings: Rc<RefCell<SaveSettings>>,
-    /// Gestore delle hotkeys registrate e del loro ascolto.
+    /// Gestore delle hotkeys registrate.
     registered_hotkeys: Arc<RegisteredHotkeys>,
     /// Contiene Some() se è stato lanciato un worker per copiare dati sulla clipboard.
     clipboard: Option<Receiver<Result<(), arboard::Error>>>,
