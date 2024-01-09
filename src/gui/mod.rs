@@ -160,12 +160,17 @@ impl GlobalGuiState {
         }
     }
 
+    ///Lancia il thread che gestisce il file dialog per la scelta di una cartella.
+    /// Il file dialog mostratò sarà inizialmente aperto nel path indicato come default directory nelle save settings.
+    /// Salva il <i>Receiver</i> del canale con tale thread nello stato globale. 
     fn open_directory_dialog(&mut self)
     {
         let rx = file_dialog::start_thread_directory_dialog(self.save_settings.borrow().get_default_dir());
         self.directory_dialog_receiver = Some(rx);
     }
 
+    ///A secoda dello stato attuale della gui, gestisce diversamente l'attesa che il thread
+    /// che gestisce il directory dialog invii un risultato sul canale.
     fn wait_directory_dialog(&mut self)
     {
         if let EnumGuiState::MainMenu(m) = &mut self.state
@@ -419,6 +424,14 @@ impl GlobalGuiState {
         self.pending_save_request = Some((rx, image));
     }
 
+    ///In seguito alla creazione di una richiesta di salvataggio, gestisce l'attesa (ripetendo 
+    /// la chiamata di <i>try_recv()</i>) che il thread demandato a gestire il file dialog
+    /// invii sul canale.
+    /// Quando la option viene ricevuta sul canale:
+    /// - se è Some(path), avvia il thread che salverà l'immagine presso il path ricevuto e cambia
+    ///     lo stato della gui in <i>EnumGuiState::Saving</i>;
+    /// - se è None, elimina la richiesta di salvataggio.
+    /// Se il canale si è chiuso, segnala l'errore. 
     fn wait_output_file_path(&mut self) {
         if let Some((rx, _)) = &self.pending_save_request {
             match rx.try_recv() {

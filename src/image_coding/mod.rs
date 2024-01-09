@@ -16,29 +16,39 @@ use crate::DEBUG;
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ImageFormat {
-
     Png,
-    JPEG,
-    GIF,
+    Jpeg,
+    Gif,
 }
 
 impl Into<&str> for ImageFormat {
     fn into(self) -> &'static str {
         match self {
             Self::Png => "Png",
-            Self::JPEG => "Jpeg",
-            Self::GIF => "Gif",
+            Self::Jpeg => "Jpeg",
+            Self::Gif => "Gif",
+        }
+    }
+}
+
+impl From<&str> for ImageFormat {
+    fn from(s: &str) -> Self {
+        match s {
+            "Png" | "PNG" | "png" => Self::Png ,
+            "Jpeg" | "JPEG" | "jpeg" => Self::Jpeg ,
+            "Gif" | "gif" | "GIF" => Self::Gif ,
+            &_ => {unreachable!("Non recognized extension");}
         }
     }
 }
 
 impl ImageFormat {
     ///Utility per ottenere l'elenco dei formati contenuti nella enum sotto forma di stringhe.
-    pub fn available_formats() -> Vec<&'static str> {
+    pub fn available_formats() -> Vec<ImageFormat> {
         vec![
-            ImageFormat::Png.into(),
-            ImageFormat::JPEG.into(),
-            ImageFormat::GIF.into(),
+            ImageFormat::Png,
+            ImageFormat::Jpeg,
+            ImageFormat::Gif,
         ]
     }
 }
@@ -120,7 +130,7 @@ pub fn start_thread_save_image(
 ///Se il formato è GIF, esegue codice specifico per accelerare il salvataggio.
 fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageResult<()> {
     if let Some(ext) = file_output.extension() {
-        if ImageFormat::available_formats().contains(&ext.to_str().unwrap()) {
+        if ImageFormat::available_formats().contains(&ImageFormat::from(ext.to_str().unwrap())) {
             return match ext.to_str().unwrap() {
                 "Gif" => {
                     let file = File::create(file_output).unwrap();

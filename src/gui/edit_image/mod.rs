@@ -572,9 +572,10 @@ impl EditImage {
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.format, ImageFormat::Png, "Png");
-                    ui.selectable_value(&mut self.format, ImageFormat::JPEG, "Jpeg");
-                    ui.selectable_value(&mut self.format, ImageFormat::GIF, "Gif");
+                    for f in ImageFormat::available_formats().iter() 
+                    {
+                        ui.selectable_value(&mut self.format,*f, <ImageFormat as Into<&str>>::into(*f));
+                    }
                 });
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                 if ui.button("Abort").clicked() {

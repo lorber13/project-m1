@@ -92,13 +92,13 @@ impl SaveSettings
     /// - <i>(None, Some(..))</i>: viene mostrato un directory dialog;
     /// - <i>(Some(..), None)</i>: viene mostrato un file dialog che di default apre la default_dir, ma potenzialmente l'user
     ///     potrebbe modificare a piacere la cartella di salvataggio in questa fase;
-    /// - <i>(None, None)</i>: viene mostrato un file dialog che di default apre la cartella root.
+    /// - <i>(None, None)</i>: viene mostrato un file dialog che di default apre la cartella "/".
     ///
-    /// Se l'user conferma l'operazione di selezione tramite file dialog, oppure se si è presentata la prima situazione sopra
-    /// descritta, il metodo avvia il thread che realizza il salvataggio al path ottenuto. Poi, memorizza nello stato corrente
-    /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread. Lo stato cambia quindi in <i>EnumGuiState::Saving</i>.<br>
-    ///
-    /// Se l'user annulla l'operazione di selezione tramite file dialog, la gui continua a mostrare la schermata EditImage.
+    /// Ritorna <b>Receiver<Option<PathBuf>></b> endpoint del canale di comunicazione con
+    /// il thread lanciato per eseguire le operazioni sopra descritte.
+    /// Un thread parallelo a quello principale è necessario per non bloccare la gui mentre
+    /// viene mostrato il file/directory dialog e per non appesantire il main
+    /// thread con operazioni di manipolazione di path.
     pub fn compose_output_file_path(&self, format: ImageFormat) -> Receiver<Option<PathBuf>> {
 
         let dd_opt = self.get_default_dir();
@@ -353,7 +353,7 @@ mod tests
     {
         let ss = create_ss();
 
-        let res = ss.compose_output_file_path(ImageFormat::GIF).recv().unwrap();
+        let res = ss.compose_output_file_path(ImageFormat::Gif).recv().unwrap();
         if let Some(path) = res
         {
             assert!(path.extension().unwrap().to_str().unwrap() == "Gif");
