@@ -32,7 +32,6 @@ impl CaptureMode {
         &mut self,
         ui: &mut egui::Ui,
         ctx: &egui::Context,
-        _frame: &mut eframe::Frame,
     ) -> Option<(ScreenshotDim, f64)> {
         let mut ret = None;
 

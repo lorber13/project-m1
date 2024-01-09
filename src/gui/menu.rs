@@ -63,7 +63,6 @@ impl MainMenu {
         &mut self,
         enabled: bool,
         ctx: &Context,
-        frame: &mut eframe::Frame,
     ) -> MainMenuEvent {
         let mut ret = MainMenuEvent::Nil;
         CentralPanel::default().show(ctx, |ui| {
@@ -74,7 +73,7 @@ impl MainMenu {
                         ui.vertical(|ui| {
                             if ui.button("Home").clicked() {
                                 ui.close_menu();
-                                self.switch_to_main_window(frame);
+                                self.switch_to_main_window();
                             }
                             ui.menu_button("Settings...", |ui| {
                                 if ui.button("Save Settings").clicked() {
@@ -95,13 +94,13 @@ impl MainMenu {
 
                         match self.state {
                             MainMenuState::CaptureMode(_) => {
-                                ret = self.show_main_window(ui, ctx, frame);
+                                ret = self.show_main_window(ui, ctx);
                             }
                             MainMenuState::SaveSettings(..) => {
-                                ret = self.show_save_settings(ui, frame);
+                                ret = self.show_save_settings(ui);
                             }
                             MainMenuState::HotkeysSettings(..) => {
-                                self.show_hotkeys_settings(ui, frame);
+                                self.show_hotkeys_settings(ui);
                             }
                             MainMenuState::LoadingHotkeysSettings(..) => {
                                 self.load_hotkeys_settings(ctx);
@@ -120,7 +119,7 @@ impl MainMenu {
     /// Controlla qual'è l'attuale stato di main menu: se è già mostrata la schermata "capture mode", questo metodo non ha effetto.
     /// Altrimenti, modifica lo stato corrente.
     /// Nel nuovo stato viene memorizzata una nuova istanza di CaptureMode.
-    fn switch_to_main_window(&mut self, _frame: &mut eframe::Frame) {
+    fn switch_to_main_window(&mut self) {
         match self.state {
             MainMenuState::CaptureMode(..) => (), //non c'è niente di nuovo da visualizzare
             _ => {
@@ -139,12 +138,11 @@ impl MainMenu {
         &mut self,
         ui: &mut Ui,
         ctx: &Context,
-        frame: &mut eframe::Frame,
     ) -> MainMenuEvent {
         let mut ret = MainMenuEvent::Nil;
         if let MainMenuState::CaptureMode(ref mut cm) = self.state {
             //controllo l'utput della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
-            if let Some((area, delay)) = cm.update(ui, ctx, frame) {
+            if let Some((area, delay)) = cm.update(ui, ctx) {
                 ret = MainMenuEvent::ScreenshotRequest(area, delay);
             }
         } else {
@@ -181,15 +179,15 @@ impl MainMenu {
     ///
     /// <h3>Panics:</h3>
     /// Se <i>self.state</i> è diverso da <i>MainMenuState::SaveSettings</i>.
-    fn show_save_settings(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) -> MainMenuEvent {
+    fn show_save_settings(&mut self, ui: &mut Ui) -> MainMenuEvent {
         if let MainMenuState::SaveSettings(ss) = &mut self.state {
             match ss.update(ui) {
                 SettingsEvent::Saved => {
                     self.save_settings.replace(ss.clone());
-                    self.switch_to_main_window(frame);
+                    self.switch_to_main_window();
                 }
                 SettingsEvent::Aborted => {
-                    self.switch_to_main_window(frame);
+                    self.switch_to_main_window();
                 }
                 SettingsEvent::Nil => (),
                 SettingsEvent::OpenDirectoryDialog => return MainMenuEvent::OpenDirectoryDialog
@@ -201,6 +199,10 @@ impl MainMenu {
         MainMenuEvent::Nil
     }
 
+    /// Gestisce l'attesa (busy wait) che il thread che gestisce il directory dialog invii 
+    /// sul canale (try_recv()).
+    /// - Se il canale è stato chiuso inaspettatamente, segnala l'errore ed elimina il receiver;
+    /// - Altrimenti, elimina il receiver dopo aver salvato l'eventuale path ritornato.
     pub fn wait_directory_dialog(&mut self, directory_dialog_receiver: &mut Option<Receiver<Option<PathBuf>>>)
     {
         if let Some(rx) = directory_dialog_receiver
@@ -271,7 +273,7 @@ impl MainMenu {
                     self.alert
                         .borrow_mut()
                         .replace("Loading failed".to_string());
-self.switch_to_main_window();
+                        self.switch_to_main_window();
                 }
                 Err(TryRecvError::Empty) => loading::show_loading(ctx),
             }
@@ -292,12 +294,12 @@ self.switch_to_main_window();
     ///
     /// <h3>Panics:</h3>
     /// Se <i>self.state</i> è diverso da <i>MainMenuState::LoadingHotkeysSettings</i>.
-    fn show_hotkeys_settings(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+    fn show_hotkeys_settings(&mut self, ui: &mut Ui) {
         if let MainMenuState::HotkeysSettings(hs) = &mut self.state {
             self.registered_hotkeys.set_listen_enabled(false);
             match hs.update(ui) {
                 SettingsEvent::Saved | SettingsEvent::Aborted => {
-                    self.switch_to_main_window(frame);
+                    self.switch_to_main_window();
                 }
                 SettingsEvent::Nil => (),
                 SettingsEvent::OpenDirectoryDialog => {unreachable!("Impossible to open directory dialog from hotkey settings");}

@@ -149,7 +149,7 @@ impl GlobalGuiState {
         enabled: bool,
     ) {
         if let EnumGuiState::MainMenu(m) = &mut self.state {
-            match m.update(enabled, ctx, frame) {
+            match m.update(enabled, ctx) {
                 MainMenuEvent::ScreenshotRequest(sd, d) => self.start_wait_delay(d, sd, frame, ctx),
                 MainMenuEvent::OpenDirectoryDialog => self.open_directory_dialog(),
                 MainMenuEvent::Nil => (),
