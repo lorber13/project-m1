@@ -1,12 +1,7 @@
-pub mod edit_image_utils;
+pub mod utils;
 
 use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
-use edit_image_utils::{
-    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
-    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
-    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
-};
 use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
     color_picker, pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, Key, Layout,
@@ -19,6 +14,11 @@ use image::RgbaImage;
 use imageproc::drawing::Blend;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
+use utils::{
+    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
+    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
+    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
+};
 
 /// indica se e' stato premuto uno dei pulsanti Save o Abort.
 /// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
@@ -248,11 +248,7 @@ impl EditImage {
 
     /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
     /// disegnato sulla finestra
-    pub fn update(
-        &mut self,
-        ctx: &Context,
-        enabled: bool,
-    ) -> EditImageEvent {
+    pub fn update(&mut self, ctx: &Context, enabled: bool) -> EditImageEvent {
         CentralPanel::default()
             .show(ctx, |ui| match self.receive_thread.try_recv() {
                 Ok(image) => EditImageEvent::Saved {
@@ -571,9 +567,12 @@ impl EditImage {
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
-                    for f in ImageFormat::available_formats().iter() 
-                    {
-                        ui.selectable_value(&mut self.format,*f, <ImageFormat as Into<&str>>::into(*f));
+                    for f in ImageFormat::available_formats().iter() {
+                        ui.selectable_value(
+                            &mut self.format,
+                            *f,
+                            <ImageFormat as Into<&str>>::into(*f),
+                        );
                     }
                 });
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
