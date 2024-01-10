@@ -25,7 +25,7 @@ use utils::{
 /// Lo stato Aborted indica che e' stato premuto il pulsante Abort
 /// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
 /// (`RgbaImage`), e il suo formato (`ImageFormat`)
-pub enum EditImageEvent {
+pub enum FrameEvent {
     Saved {
         image: RgbaImage,
         format: ImageFormat,
@@ -248,17 +248,17 @@ impl EditImage {
 
     /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
     /// disegnato sulla finestra
-    pub fn update(&mut self, ctx: &Context, enabled: bool) -> EditImageEvent {
+    pub fn update(&mut self, ctx: &Context, enabled: bool) -> FrameEvent {
         CentralPanel::default()
             .show(ctx, |ui| match self.receive_thread.try_recv() {
-                Ok(image) => EditImageEvent::Saved {
+                Ok(image) => FrameEvent::Saved {
                     image,
                     format: self.format,
                 },
                 Err(error) => match error {
                     TryRecvError::Empty => {
                         show_loading(ctx);
-                        EditImageEvent::Nil
+                        FrameEvent::Nil
                     }
                     TryRecvError::Disconnected => {
                         ui.add_enabled_ui(enabled, |ui| {
@@ -485,7 +485,7 @@ impl EditImage {
     }
 
     /// disegna i bottoni principali dell'interfaccia
-    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
+    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> FrameEvent {
         ui.horizontal(|ui| {
             ui.label("Tool:");
             if ui
@@ -577,7 +577,7 @@ impl EditImage {
                 });
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                 if ui.button("Abort").clicked() {
-                    EditImageEvent::Aborted
+                    FrameEvent::Aborted
                 } else if ui.button("Save").clicked() {
                     let (tx, rx) = channel();
                     self.receive_thread = rx;
@@ -600,9 +600,9 @@ impl EditImage {
                             .to_image(),
                         )
                     });
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 } else {
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 }
             })
             .inner
