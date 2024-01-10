@@ -1,31 +1,33 @@
-pub mod edit_image_utils;
+pub mod utils;
 
+use crate::gui::edit_image::utils::{
+    handle_arrow_usage, handle_circle_usage, handle_cut, handle_pen_usage, handle_rect_usage,
+};
 use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
-use edit_image_utils::{
-    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
-    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
-    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
-};
 use eframe::egui::color_picker::Alpha;
+use eframe::egui::ComboBox;
 use eframe::egui::{
     color_picker, pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, Key, Layout,
     Painter, Pos2, Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions,
-    Ui, Vec2,
+    Ui,
 };
-use eframe::egui::{ComboBox, CursorIcon};
 use image::imageops::crop_imm;
 use image::RgbaImage;
 use imageproc::drawing::Blend;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
+use utils::{
+    obscure_screen, scale_annotation, scaled_rect, stroke_ui_opaque, write_annotation_to_image,
+    Direction,
+};
 
 /// indica se e' stato premuto uno dei pulsanti Save o Abort.
-/// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
+/// Lo stato `Nil` indica che non e' stato premuto nessuno dei due pulsanti
 /// Lo stato Aborted indica che e' stato premuto il pulsante Abort
 /// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
 /// (`RgbaImage`), e il suo formato (`ImageFormat`)
-pub enum EditImageEvent {
+pub enum FrameEvent {
     Saved {
         image: RgbaImage,
         format: ImageFormat,
@@ -68,7 +70,7 @@ enum Tool {
 /// il rettangolo di ritaglio puo' essere mosso, ridimensionato, oppure puo' non essere modificato. Se sta venendo
 /// ridimensionato, viene anche indicata una direzione.
 #[derive(PartialEq, Debug)]
-enum ModificationOfRectangle {
+pub enum ModificationOfRectangle {
     Move,
     Resize { direction: Direction },
     NoModification,
@@ -253,17 +255,17 @@ impl EditImage {
         ctx: &Context,
         _frame: &mut eframe::Frame,
         enabled: bool,
-    ) -> EditImageEvent {
+    ) -> FrameEvent {
         CentralPanel::default()
             .show(ctx, |ui| match self.receive_thread.try_recv() {
-                Ok(image) => EditImageEvent::Saved {
+                Ok(image) => FrameEvent::Saved {
                     image,
                     format: self.format,
                 },
                 Err(error) => match error {
                     TryRecvError::Empty => {
                         show_loading(ctx);
-                        EditImageEvent::Nil
+                        FrameEvent::Nil
                     }
                     TryRecvError::Disconnected => {
                         ui.add_enabled_ui(enabled, |ui| {
@@ -288,156 +290,74 @@ impl EditImage {
         self.handle_ctrl_z(ctx);
         match &mut self.current_tool {
             Tool::Pen { line } => {
-                if response.drag_started() {
-                    line.push(
-                        response
-                            .hover_pos()
-                            .expect("should not panic because the pointer should be on the widget"),
-                    );
-                } else if response.dragged() {
-                    line.push(
-                        ctx.pointer_hover_pos()
-                            .expect("should not panic because while dragging the pointer exists"),
-                    );
-                } else if response.drag_released() {
-                    // no need to push current hover pos, since this frame drag is released
-                    self.annotations.push(Shape::line(
-                        line.clone()
-                            .iter_mut()
-                            .map(|point| {
-                                unscaled_point(painter_rect.left_top(), self.scale_ratio, *point)
-                            })
-                            .collect(),
-                        Stroke::new(self.stroke.width / self.scale_ratio, self.stroke.color),
-                    ));
-                    *line = Vec::new();
-                }
+                handle_pen_usage(
+                    &mut self.annotations,
+                    self.stroke,
+                    self.scale_ratio,
+                    ctx,
+                    response,
+                    painter_rect.left_top(),
+                    line,
+                );
             }
             Tool::Circle {
                 start_drag,
                 end_drag,
             } => {
-                if response.drag_started() {
-                    *start_drag = response.hover_pos();
-                } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
-                    *end_drag = ctx.pointer_hover_pos();
-                } else if response.drag_released() {
-                    self.annotations.push(create_circle(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
-                    *start_drag = None;
-                    *end_drag = None;
-                }
+                handle_circle_usage(
+                    &mut self.annotations,
+                    ctx,
+                    response,
+                    painter_rect.left_top(),
+                    self.fill_shape,
+                    self.scale_ratio,
+                    self.stroke,
+                    start_drag,
+                    end_drag,
+                );
             }
             Tool::Rect {
                 start_drag,
                 end_drag,
             } => {
-                if response.drag_started() {
-                    *start_drag = response.hover_pos();
-                } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
-                    *end_drag = ctx.pointer_hover_pos();
-                } else if response.drag_released() {
-                    self.annotations.push(create_rect(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
-                    *start_drag = None;
-                    *end_drag = None;
-                }
+                handle_rect_usage(
+                    &mut self.annotations,
+                    ctx,
+                    response,
+                    painter_rect.left_top(),
+                    self.stroke,
+                    self.scale_ratio,
+                    self.fill_shape,
+                    start_drag,
+                    end_drag,
+                );
             }
             Tool::Arrow {
                 start_drag,
                 end_drag,
             } => {
-                if response.drag_started() {
-                    *start_drag = response.hover_pos();
-                } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
-                    *end_drag = ctx.pointer_hover_pos();
-                } else if response.drag_released() {
-                    push_arrow_into_annotations(
-                        &mut self.annotations,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    );
-                    *start_drag = None;
-                    *end_drag = None;
-                }
+                handle_arrow_usage(
+                    &mut self.annotations,
+                    ctx,
+                    response,
+                    painter_rect.left_top(),
+                    self.scale_ratio,
+                    self.stroke,
+                    start_drag,
+                    end_drag,
+                );
             }
             // todo: while dragging, the rectangle must not become a negative rectangle
             Tool::Cut { modifying } => {
-                match modifying {
-                    ModificationOfRectangle::Move => {
-                        ctx.set_cursor_icon(CursorIcon::Grabbing);
-                        if response.dragged() {
-                            // todo: work in painter dimensions, not real dimensions
-                            // todo: refine the function that makes the rectangle not escape borders
-                            self.translate_rect(response);
-                        } else if response.drag_released() {
-                            *modifying = ModificationOfRectangle::NoModification;
-                        }
-                    }
-                    ModificationOfRectangle::Resize { direction } => {
-                        set_cursor(direction, ctx);
-                        if response.dragged() {
-                            self.cut_rect = resize_rectangle(
-                                self.cut_rect,
-                                ctx.pointer_hover_pos().expect("should be defined"),
-                                self.scale_ratio,
-                                painter_rect.left_top(),
-                                direction,
-                            );
-                        } else if response.drag_released() {
-                            make_rect_legal(&mut self.cut_rect);
-                            self.cut_rect = self.cut_rect.intersect(Rect::from_min_size(
-                                pos2(0.0, 0.0),
-                                self.texture_handle.size_vec2(),
-                            ));
-                            *modifying = ModificationOfRectangle::NoModification;
-                        }
-                    }
-                    ModificationOfRectangle::NoModification => {
-                        if let Some(pos) = response.hover_pos() {
-                            let rect = scaled_rect(
-                                painter_rect.left_top(),
-                                self.scale_ratio,
-                                self.cut_rect,
-                            );
-                            match hover_to_direction(rect, pos, 10.0) {
-                                None => {
-                                    // the cursor is not on the border of the cutting rectangle
-                                    if rect.contains(pos) {
-                                        ctx.set_cursor_icon(CursorIcon::Grab);
-                                        if response.drag_started() {
-                                            *modifying = ModificationOfRectangle::Move;
-                                        }
-                                    }
-                                }
-                                Some(direction) => {
-                                    set_cursor(&direction, ctx);
-                                    if response.drag_started() {
-                                        *modifying = ModificationOfRectangle::Resize { direction }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                handle_cut(
+                    modifying,
+                    ctx,
+                    response,
+                    self.scale_ratio,
+                    painter_rect.left_top(),
+                    &mut self.cut_rect,
+                    &self.texture_handle,
+                );
             }
         }
     }
@@ -456,41 +376,8 @@ impl EditImage {
         }
     }
 
-    /// trasla il rettangolo di ritaglio. Se il rettangolo di ritaglio viene portato fuori dai bordi, viene ritraslato
-    /// automaticamente sul bordo piu' vicino
-    fn translate_rect(&mut self, response: &Response) {
-        let image_rect = Rect::from_min_size(pos2(0.0, 0.0), self.texture_handle.size_vec2());
-        let unscaled_delta = response.drag_delta() / self.scale_ratio;
-        let translated_rect = self.cut_rect.translate(unscaled_delta);
-        if image_rect.contains_rect(translated_rect) {
-            self.cut_rect = translated_rect;
-        } else {
-            self.align_rect_to_borders(image_rect, translated_rect);
-        }
-    }
-
-    /// ritrasla automaticamente il rettangolo di ritaglio sul bordo piu' vicino
-    fn align_rect_to_borders(&mut self, image_rect: Rect, translated_rect: Rect) {
-        self.cut_rect = translated_rect.translate({
-            let mut vec = Vec2::default();
-            if translated_rect.left() < image_rect.left() {
-                vec.x = image_rect.left() - translated_rect.left();
-            }
-            if translated_rect.top() < image_rect.top() {
-                vec.y = image_rect.top() - translated_rect.top();
-            }
-            if translated_rect.right() > image_rect.right() {
-                vec.x = image_rect.right() - translated_rect.right();
-            }
-            if translated_rect.bottom() > image_rect.bottom() {
-                vec.y = image_rect.bottom() - translated_rect.bottom();
-            }
-            vec
-        });
-    }
-
     /// disegna i bottoni principali dell'interfaccia
-    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
+    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> FrameEvent {
         ui.horizontal(|ui| {
             ui.label("Tool:");
             if ui
@@ -578,7 +465,7 @@ impl EditImage {
                 });
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                 if ui.button("Abort").clicked() {
-                    EditImageEvent::Aborted
+                    FrameEvent::Aborted
                 } else if ui.button("Save").clicked() {
                     let (tx, rx) = channel();
                     self.receive_thread = rx;
@@ -601,9 +488,9 @@ impl EditImage {
                             .to_image(),
                         )
                     });
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 } else {
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 }
             })
             .inner

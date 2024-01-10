@@ -1,7 +1,8 @@
+use crate::gui::edit_image::ModificationOfRectangle;
 use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
-    color_picker, pos2, Color32, Context, CursorIcon, DragValue, Painter, Pos2, Rect, Rounding,
-    Shape, Stroke, Ui, Vec2,
+    color_picker, pos2, Color32, Context, CursorIcon, DragValue, Painter, Pos2, Rect, Response,
+    Rounding, Shape, Stroke, TextureHandle, Ui, Vec2,
 };
 use eframe::emath::Rot2;
 use eframe::epaint::{CircleShape, RectShape};
@@ -70,12 +71,13 @@ pub fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] 
     let segment_length = ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)).sqrt();
     let delta_x = width * (y2 - y1) / segment_length;
     let delta_y = width * (x2 - x1) / segment_length;
-    let point1 = Point::new((x1 + delta_x) as i32, (y1 - delta_y) as i32);
-    let point2 = Point::new((x1 - delta_x) as i32, (y1 + delta_y) as i32);
-    let point3 = Point::new((x2 - delta_x) as i32, (y2 + delta_y) as i32);
-    let point4 = Point::new((x2 + delta_x) as i32, (y2 - delta_y) as i32);
 
-    [point1, point2, point3, point4]
+    [
+        Point::new((x1 + delta_x) as i32, (y1 - delta_y) as i32),
+        Point::new((x1 - delta_x) as i32, (y1 + delta_y) as i32),
+        Point::new((x2 - delta_x) as i32, (y2 + delta_y) as i32),
+        Point::new((x2 + delta_x) as i32, (y2 - delta_y) as i32),
+    ]
 }
 
 /// la funzione trasforma un rettangolo degenere (con dimensioni negative) nel rettangolo identico ma con dimensioni
@@ -517,4 +519,223 @@ fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &Ci
             Rgba(circle_shape.stroke.color.to_array()),
         );
     }
+}
+
+pub fn handle_pen_usage(
+    annotations: &mut Vec<Shape>,
+    stroke: Stroke,
+    scale_ratio: f32,
+    ctx: &Context,
+    response: &Response,
+    top_left: Pos2,
+    line: &mut Vec<Pos2>,
+) {
+    if response.drag_started() {
+        line.push(
+            response
+                .hover_pos()
+                .expect("should not panic because the pointer should be on the widget"),
+        );
+    } else if response.dragged() {
+        line.push(
+            ctx.pointer_hover_pos()
+                .expect("should not panic because while dragging the pointer exists"),
+        );
+    } else if response.drag_released() {
+        // no need to push current hover pos, since this frame drag is released
+        annotations.push(Shape::line(
+            line.clone()
+                .iter_mut()
+                .map(|point| unscaled_point(top_left, scale_ratio, *point))
+                .collect(),
+            Stroke::new(stroke.width / scale_ratio, stroke.color),
+        ));
+        *line = Vec::new();
+    }
+}
+pub fn handle_circle_usage(
+    annotations: &mut Vec<Shape>,
+    ctx: &Context,
+    response: &Response,
+    top_left: Pos2,
+    fill_shape: bool,
+    scale_ratio: f32,
+    stroke: Stroke,
+    start_drag: &mut Option<Pos2>,
+    end_drag: &mut Option<Pos2>,
+) {
+    if response.drag_started() {
+        *start_drag = response.hover_pos();
+    } else if response.dragged() {
+        assert!(ctx.pointer_hover_pos().is_some());
+        *end_drag = ctx.pointer_hover_pos();
+    } else if response.drag_released() {
+        annotations.push(create_circle(
+            fill_shape,
+            scale_ratio,
+            stroke,
+            top_left,
+            start_drag.expect("should be defined"),
+            end_drag.expect("should be defined"),
+        ));
+        *start_drag = None;
+        *end_drag = None;
+    }
+}
+
+pub fn handle_rect_usage(
+    annotations: &mut Vec<Shape>,
+    ctx: &Context,
+    response: &Response,
+    top_left: Pos2,
+    stroke: Stroke,
+    scale_ratio: f32,
+    fill_shape: bool,
+    start_drag: &mut Option<Pos2>,
+    end_drag: &mut Option<Pos2>,
+) {
+    if response.drag_started() {
+        *start_drag = response.hover_pos();
+    } else if response.dragged() {
+        assert!(ctx.pointer_hover_pos().is_some());
+        *end_drag = ctx.pointer_hover_pos();
+    } else if response.drag_released() {
+        annotations.push(create_rect(
+            fill_shape,
+            scale_ratio,
+            stroke,
+            top_left,
+            start_drag.expect("should be defined"),
+            end_drag.expect("should be defined"),
+        ));
+        *start_drag = None;
+        *end_drag = None;
+    }
+}
+
+pub fn handle_arrow_usage(
+    annotations: &mut Vec<Shape>,
+    ctx: &Context,
+    response: &Response,
+    top_left: Pos2,
+    scale_ratio: f32,
+    stroke: Stroke,
+    start_drag: &mut Option<Pos2>,
+    end_drag: &mut Option<Pos2>,
+) {
+    if response.drag_started() {
+        *start_drag = response.hover_pos();
+    } else if response.dragged() {
+        assert!(ctx.pointer_hover_pos().is_some());
+        *end_drag = ctx.pointer_hover_pos();
+    } else if response.drag_released() {
+        push_arrow_into_annotations(
+            annotations,
+            scale_ratio,
+            stroke,
+            top_left,
+            start_drag.expect("should be defined"),
+            end_drag.expect("should be defined"),
+        );
+        *start_drag = None;
+        *end_drag = None;
+    }
+}
+
+pub fn handle_cut(
+    modifying: &mut ModificationOfRectangle,
+    ctx: &Context,
+    response: &Response,
+    scale_ratio: f32,
+    top_left: Pos2,
+    cut_rect: &mut Rect,
+    texture_handle: &TextureHandle,
+) {
+    match modifying {
+        ModificationOfRectangle::Move => {
+            ctx.set_cursor_icon(CursorIcon::Grabbing);
+            if response.dragged() {
+                // todo: work in painter dimensions, not real dimensions
+                // todo: refine the function that makes the rectangle not escape borders
+                *cut_rect = translate_rect_with_boundary(
+                    *cut_rect,
+                    Rect::from_min_size(Pos2::ZERO, texture_handle.size_vec2()),
+                    response.drag_delta() / scale_ratio,
+                );
+            } else if response.drag_released() {
+                *modifying = ModificationOfRectangle::NoModification;
+            }
+        }
+        ModificationOfRectangle::Resize { direction } => {
+            set_cursor(direction, ctx);
+            if response.dragged() {
+                *cut_rect = resize_rectangle(
+                    *cut_rect,
+                    ctx.pointer_hover_pos().expect("should be defined"),
+                    scale_ratio,
+                    top_left,
+                    direction,
+                );
+            } else if response.drag_released() {
+                make_rect_legal(cut_rect);
+                *cut_rect = cut_rect.intersect(Rect::from_min_size(
+                    pos2(0.0, 0.0),
+                    texture_handle.size_vec2(),
+                ));
+                *modifying = ModificationOfRectangle::NoModification;
+            }
+        }
+        ModificationOfRectangle::NoModification => {
+            if let Some(pos) = response.hover_pos() {
+                let rect = scaled_rect(top_left, scale_ratio, *cut_rect);
+                match hover_to_direction(rect, pos, 10.0) {
+                    None => {
+                        // the cursor is not on the border of the cutting rectangle
+                        if rect.contains(pos) {
+                            ctx.set_cursor_icon(CursorIcon::Grab);
+                            if response.drag_started() {
+                                *modifying = ModificationOfRectangle::Move;
+                            }
+                        }
+                    }
+                    Some(direction) => {
+                        set_cursor(&direction, ctx);
+                        if response.drag_started() {
+                            *modifying = ModificationOfRectangle::Resize { direction }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Trasla il rettangolo di ritaglio. Se il rettangolo di ritaglio viene portato fuori dai bordi, viene riposizionato
+/// automaticamente sul bordo piu' vicino
+pub fn translate_rect_with_boundary(rect: Rect, boundary: Rect, delta: Vec2) -> Rect {
+    let mut rect = rect.translate(delta);
+    if !boundary.contains_rect(rect) {
+        rect = align_rect_to_borders(rect, boundary);
+    }
+    rect
+}
+
+/// riposiziona automaticamente il rettangolo di ritaglio sul bordo piu' vicino
+pub fn align_rect_to_borders(rect: Rect, boundary: Rect) -> Rect {
+    rect.translate({
+        let mut vec = Vec2::default();
+        if rect.left() < boundary.left() {
+            vec.x = boundary.left() - rect.left();
+        }
+        if rect.top() < boundary.top() {
+            vec.y = boundary.top() - rect.top();
+        }
+        if rect.right() > boundary.right() {
+            vec.x = boundary.right() - rect.right();
+        }
+        if rect.bottom() > boundary.bottom() {
+            vec.y = boundary.bottom() - rect.bottom();
+        }
+        vec
+    })
 }

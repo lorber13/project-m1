@@ -1,12 +1,12 @@
 /*
-La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
+La gui, a causa delle limitazioni imposte da eframe, deve essere eseguita solo nel thread principale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di non iniziare mai attese bloccanti.
 
 La gui è quindi basata su una macchina a stati e le varianti della EnumGuiState incapsulano le variabili
 con i dettagli di ciascuno stato.
 In particolare, se una variante incapsula un Receiver, allora essa rappresenta uno stato di attesa
 della gui, che fa busy waiting con try_recv(). Si noti che il design della sincronizzazione con altri
-thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento dell'event loop della gui, che continua a ridisegnarsi.
+thread, appena descritto, non aggiunge overhead perché asseconda il funzionamento dell'event loop della gui, che continua a ridisegnarsi.
 
 Lo stato della gui è memorizzato dentro la struct GlobalGuiState assieme ad altre informazioni globali.
  */
@@ -21,7 +21,7 @@ mod menu;
 mod rect_selection;
 mod save_settings;
 
-use self::edit_image::EditImageEvent;
+use self::edit_image::FrameEvent;
 use self::menu::MainMenuEvent;
 use crate::gui::loading::show_loading;
 use crate::hotkeys::{self, HotkeyName, RegisteredHotkeys};
@@ -91,7 +91,7 @@ pub struct GlobalGuiState {
     /// prima del salvataggio dell'immagine: la finestra principale deve essere mostrata ma disabilitata
     pending_save_request: Option<(Receiver<Option<PathBuf>>, RgbaImage)>,
     ///Se != None, allora l'applicazione è in attesa che l'utente chiuda il file dialog
-    directory_dialog_receiver: Option<Receiver<Option<PathBuf>>>
+    directory_dialog_receiver: Option<Receiver<Option<PathBuf>>>,
 }
 
 impl GlobalGuiState {
@@ -116,7 +116,7 @@ impl GlobalGuiState {
             clipboard: None,
             hotkey_receiver: None,
             pending_save_request: None,
-            directory_dialog_receiver: None
+            directory_dialog_receiver: None,
         }
     }
 
@@ -159,16 +159,15 @@ impl GlobalGuiState {
         }
     }
 
-    fn open_directory_dialog(&mut self)
-    {
-        let rx = file_dialog::start_thread_directory_dialog(self.save_settings.borrow().get_default_dir());
+    fn open_directory_dialog(&mut self) {
+        let rx = file_dialog::start_thread_directory_dialog(
+            self.save_settings.borrow().get_default_dir(),
+        );
         self.directory_dialog_receiver = Some(rx);
     }
 
-    fn wait_directory_dialog(&mut self)
-    {
-        if let EnumGuiState::MainMenu(m) = &mut self.state
-        {
+    fn wait_directory_dialog(&mut self) {
+        if let EnumGuiState::MainMenu(m) = &mut self.state {
             m.wait_directory_dialog(&mut self.directory_dialog_receiver);
         }
     }
@@ -243,7 +242,8 @@ impl GlobalGuiState {
             println!("nframe (switch to rect selection): {}", ctx.frame_nr());
         }
         self.state = EnumGuiState::LoadingRectSelection(
-            self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+            self.screens_manager
+                .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
         );
     }
 
@@ -336,7 +336,8 @@ impl GlobalGuiState {
             frame.set_visible(false);
             ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(
-                self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+                self.screens_manager
+                    .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
             );
         }
     }
@@ -397,11 +398,11 @@ impl GlobalGuiState {
     ) {
         if let EnumGuiState::EditImage(em) = &mut self.state {
             match em.update(ctx, frame, enabled) {
-                EditImageEvent::Saved { image, format } => {
+                FrameEvent::Saved { image, format } => {
                     self.manage_save_request(image, format);
                 }
-                EditImageEvent::Aborted => self.switch_to_main_menu(frame),
-                EditImageEvent::Nil => (),
+                FrameEvent::Aborted => self.switch_to_main_menu(frame),
+                FrameEvent::Nil => (),
             }
         } else {
             unreachable!();
@@ -545,8 +546,9 @@ impl eframe::App for GlobalGuiState {
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         //if crate::DEBUG {print!("gui refresh. ");}
 
-        let main_window_enabled =
-            self.alert.borrow().is_none() && self.pending_save_request.is_none() && self.directory_dialog_receiver.is_none();
+        let main_window_enabled = self.alert.borrow().is_none()
+            && self.pending_save_request.is_none()
+            && self.directory_dialog_receiver.is_none();
 
         //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys
         if self.hotkey_receiver.is_none() {
@@ -617,8 +619,7 @@ impl eframe::App for GlobalGuiState {
             if self.pending_save_request.is_some() {
                 self.wait_output_file_path();
                 ctx.request_repaint();
-            }else if self.directory_dialog_receiver.is_some()
-            {
+            } else if self.directory_dialog_receiver.is_some() {
                 self.wait_directory_dialog();
                 ctx.request_repaint();
             }
