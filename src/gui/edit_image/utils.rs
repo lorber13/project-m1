@@ -453,7 +453,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
             {
                 let polygon_points =
                     line_width_to_polygon(&[*segment.0, *segment.1], path_shape.stroke.width / 2.0);
-                if !(polygon_points[0] == polygon_points[polygon_points.len() - 1]) {
+                if !(polygon_points[0] == polygon_points[3]) {
                     draw_polygon_mut(
                         image_blend,
                         &polygon_points,
@@ -462,11 +462,12 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
                 }
             }
         }
-        Shape::LineSegment { points, stroke } => draw_polygon_mut(
-            image_blend,
-            &line_width_to_polygon(points, stroke.width / 2.0),
-            Rgba(stroke.color.to_array()),
-        ),
+        Shape::LineSegment { points, stroke } => {
+            let polygon_points = line_width_to_polygon(points, stroke.width / 2.0);
+            if !(polygon_points[0] == polygon_points[3]) {
+                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()))
+            }
+        }
         Shape::Circle(circle_shape) => {
             write_circle_with_width(image_blend, circle_shape);
         }

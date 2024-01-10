@@ -318,14 +318,16 @@ impl EditImage {
                     assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    self.annotations.push(create_circle(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        self.annotations.push(create_circle(
+                            self.fill_shape,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        ));
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -337,17 +339,18 @@ impl EditImage {
                 if response.drag_started() {
                     *start_drag = response.hover_pos();
                 } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    self.annotations.push(create_rect(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        self.annotations.push(create_rect(
+                            self.fill_shape,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        ));
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -359,17 +362,18 @@ impl EditImage {
                 if response.drag_started() {
                     *start_drag = response.hover_pos();
                 } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    push_arrow_into_annotations(
-                        &mut self.annotations,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    );
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        push_arrow_into_annotations(
+                            &mut self.annotations,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        );
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -567,7 +571,7 @@ impl EditImage {
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
-                    for f in ImageFormat::available_formats().iter() {
+                    for f in &ImageFormat::available_formats() {
                         ui.selectable_value(
                             &mut self.format,
                             *f,
