@@ -196,7 +196,6 @@ pub fn create_rect(
     end_drag: Pos2,
 ) -> Shape {
     if filled {
-        // todo: there is a bug in the width that seems to not be positive.
         Shape::Rect(RectShape::filled(
             unscaled_rect(
                 top_left,
