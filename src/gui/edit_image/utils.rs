@@ -433,8 +433,7 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
                 *point = scaled_point(top_left, scale_ratio, *point);
             }
         }
-        // todo: set description of reachability
-        _ => unreachable!(),
+        _ => unreachable!("This type of shape is not supposed to be managed"),
     }
 }
 
@@ -477,6 +476,8 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
     }
 }
 
+/// Scrive sull'immagine in memoria un rettangolo.
+/// In particolare, gestisce anche il caso di rettangoli con bordo spesso (spessore diverso da 1 pixel)
 fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
     draw_filled_rect_mut(
         image_blend,
@@ -502,6 +503,8 @@ fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &R
     }
 }
 
+/// Scrive sull'immagine in memoria un cerchio.
+/// In particolare, gestisce anche il caso di cerchi con bordo spesso (spessore diverso da 1 pixel)
 fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &CircleShape) {
     draw_filled_circle_mut(
         image_blend,
