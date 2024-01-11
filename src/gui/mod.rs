@@ -135,10 +135,11 @@ impl GlobalGuiState {
         ));
     }
 
-    /// Esegue il metodo <i>MainMenu::update()</i>, a cui passa enabled = false solo se l'applicazione sta mostrando la finestra di alert.
-    /// In questo modo, fino a quando la finestra di alert non verrà chiusa, i click eseguiti dall'user su MainMenu non avranno effetto.<br>
-    /// Gestisce inoltre il caso in cui <i>MainMenu::update()</i> restituisca <i>MainMenuEvent::ScreenshotRequest</i>, richiamando
-    /// <i>Self::start_wait_delay()</i>.
+    /// Esegue il metodo <i>MainMenu::update()</i>, a cui passa il parametro enabled.
+    /// Gestisce il caso in cui <i>MainMenu::update()</i> restituisca <i>MainMenuEvent::ScreenshotRequest</i>, richiamando
+    /// <i>Self::start_wait_delay()</i> per soddisfare la richiesta dopo il delay impostato.
+    /// Oppure <i>MainMenuEvent:: OpenDirectoryDialog</i>, richiamando il metodo per rendere disabilitata la finestra
+    ///corrente e aprire il file dialog.
     ///  
     /// <h3>Panics:</h3>
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::MainMenu</i>.
@@ -171,10 +172,13 @@ impl GlobalGuiState {
 
     ///A secoda dello stato attuale della gui, gestisce diversamente l'attesa che il thread
     /// che gestisce il directory dialog invii un risultato sul canale.
+    ///
+    ///<h3>Panics:</h3>
+    /// se lo stato attuale della gui non è tra quelli per i quali è prevista la gestione del directory dialog.
     fn wait_directory_dialog(&mut self) {
         if let EnumGuiState::MainMenu(m) = &mut self.state {
             m.wait_directory_dialog(&mut self.directory_dialog_receiver);
-        }
+        }else {unreachable!();}
     }
 
     /// Data una richiesta di screenshot, se essa include un delay non nullo, rende invisibile l'applicazione e
@@ -206,8 +210,7 @@ impl GlobalGuiState {
     /// Se nello stato corrente è memorizzato un JoinHandle, esegue <i>join()</i>, mettendo di fatto in attesa la gui (che intanto non è visibile)
     /// fino a quando lo sleep eseguito dal thread non è terminato. Dopo il <i>join()</i>, rende dinuovo visibile l'applicazione.
     ///
-    /// Dopo ciò, richiama un metodo diverso a seconda del tipo di screenshot richiesto:
-    /// - <i>ScreenshotDim::FullScreen</i>
+    /// Dopo ciò, richiama un metodo diverso a seconda del tipo di screenshot richiesto.
     ///
     /// <h3>Panics:</h3>
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::WaitingForDelay</i>.
