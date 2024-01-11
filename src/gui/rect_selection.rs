@@ -6,8 +6,8 @@ use image::RgbaImage;
 
 /// Struct che memorizza lo stato del componente della gui che mette a disposizione un'interfaccia per limitare lo screenshot
 /// ad un'area rettangolare attraverso operazione di drag & drop.<br>
-/// Di fatto, l'operazione corrisponde al ritaglio di uno screenshot precedentemente acquisito. Questo screenshot virne acquisito
-/// nel momento della pressione sul bottone "Acquire", doopodichè viene messo come
+/// Di fatto, l'operazione corrisponde al ritaglio di uno screenshot precedentemente acquisito. Questo screenshot viene acquisito
+/// nel momento della pressione sul bottone "Acquire", successivamente viene messo come
 /// sfondo del frame mostrato a dimensione fullscreen.<br>
 /// Per questo motivo, nella struct sono la stessa immagine è memorizzata in due forme diverse:
 /// - La <i>TextureHandle</i> viene usata per mostrare tale immagine come sfondo;
