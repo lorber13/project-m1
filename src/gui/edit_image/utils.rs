@@ -70,12 +70,13 @@ pub fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] 
     let segment_length = ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)).sqrt();
     let delta_x = width * (y2 - y1) / segment_length;
     let delta_y = width * (x2 - x1) / segment_length;
-    let point1 = Point::new((x1 + delta_x) as i32, (y1 - delta_y) as i32);
-    let point2 = Point::new((x1 - delta_x) as i32, (y1 + delta_y) as i32);
-    let point3 = Point::new((x2 - delta_x) as i32, (y2 + delta_y) as i32);
-    let point4 = Point::new((x2 + delta_x) as i32, (y2 - delta_y) as i32);
 
-    [point1, point2, point3, point4]
+    [
+        Point::new((x1 + delta_x) as i32, (y1 - delta_y) as i32),
+        Point::new((x1 - delta_x) as i32, (y1 + delta_y) as i32),
+        Point::new((x2 - delta_x) as i32, (y2 + delta_y) as i32),
+        Point::new((x2 + delta_x) as i32, (y2 - delta_y) as i32),
+    ]
 }
 
 /// la funzione trasforma un rettangolo degenere (con dimensioni negative) nel rettangolo identico ma con dimensioni
@@ -452,7 +453,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
             {
                 let polygon_points =
                     line_width_to_polygon(&[*segment.0, *segment.1], path_shape.stroke.width / 2.0);
-                if !(polygon_points[0] == polygon_points[polygon_points.len() - 1]) {
+                if !(polygon_points[0] == polygon_points[3]) {
                     draw_polygon_mut(
                         image_blend,
                         &polygon_points,
@@ -461,11 +462,12 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
                 }
             }
         }
-        Shape::LineSegment { points, stroke } => draw_polygon_mut(
-            image_blend,
-            &line_width_to_polygon(points, stroke.width / 2.0),
-            Rgba(stroke.color.to_array()),
-        ),
+        Shape::LineSegment { points, stroke } => {
+            let polygon_points = line_width_to_polygon(points, stroke.width / 2.0);
+            if !(polygon_points[0] == polygon_points[3]) {
+                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()))
+            }
+        }
         Shape::Circle(circle_shape) => {
             write_circle_with_width(image_blend, circle_shape);
         }

@@ -21,7 +21,7 @@ mod menu;
 mod rect_selection;
 mod save_settings;
 
-use self::edit_image::EditImageEvent;
+use self::edit_image::FrameEvent;
 use self::menu::MainMenuEvent;
 use crate::gui::loading::show_loading;
 use crate::hotkeys::{self, HotkeyName, RegisteredHotkeys};
@@ -91,7 +91,7 @@ pub struct GlobalGuiState {
     /// prima del salvataggio dell'immagine: la finestra principale deve essere mostrata ma disabilitata
     pending_save_request: Option<(Receiver<Option<PathBuf>>, RgbaImage)>,
     ///Se != None, allora l'applicazione è in attesa che l'utente chiuda il file dialog
-    directory_dialog_receiver: Option<Receiver<Option<PathBuf>>>
+    directory_dialog_receiver: Option<Receiver<Option<PathBuf>>>,
 }
 
 impl GlobalGuiState {
@@ -116,7 +116,7 @@ impl GlobalGuiState {
             clipboard: None,
             hotkey_receiver: None,
             pending_save_request: None,
-            directory_dialog_receiver: None
+            directory_dialog_receiver: None,
         }
     }
 
@@ -161,19 +161,18 @@ impl GlobalGuiState {
 
     ///Lancia il thread che gestisce il file dialog per la scelta di una cartella.
     /// Il file dialog mostratò sarà inizialmente aperto nel path indicato come default directory nelle save settings.
-    /// Salva il <i>Receiver</i> del canale con tale thread nello stato globale. 
-    fn open_directory_dialog(&mut self)
-    {
-        let rx = file_dialog::start_thread_directory_dialog(self.save_settings.borrow().get_default_dir());
+    /// Salva il <i>Receiver</i> del canale con tale thread nello stato globale.
+    fn open_directory_dialog(&mut self) {
+        let rx = file_dialog::start_thread_directory_dialog(
+            self.save_settings.borrow().get_default_dir(),
+        );
         self.directory_dialog_receiver = Some(rx);
     }
 
     ///A secoda dello stato attuale della gui, gestisce diversamente l'attesa che il thread
     /// che gestisce il directory dialog invii un risultato sul canale.
-    fn wait_directory_dialog(&mut self)
-    {
-        if let EnumGuiState::MainMenu(m) = &mut self.state
-        {
+    fn wait_directory_dialog(&mut self) {
+        if let EnumGuiState::MainMenu(m) = &mut self.state {
             m.wait_directory_dialog(&mut self.directory_dialog_receiver);
         }
     }
@@ -248,7 +247,8 @@ impl GlobalGuiState {
             println!("nframe (switch to rect selection): {}", ctx.frame_nr());
         }
         self.state = EnumGuiState::LoadingRectSelection(
-            self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+            self.screens_manager
+                .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
         );
     }
 
@@ -341,7 +341,8 @@ impl GlobalGuiState {
             frame.set_visible(false);
             ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(
-                self.screens_manager.start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+                self.screens_manager
+                    .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
             );
         }
     }
@@ -402,11 +403,11 @@ impl GlobalGuiState {
     ) {
         if let EnumGuiState::EditImage(em) = &mut self.state {
             match em.update(ctx, enabled) {
-                EditImageEvent::Saved { image, format } => {
+                FrameEvent::Saved { image, format } => {
                     self.manage_save_request(image, format);
                 }
-                EditImageEvent::Aborted => self.switch_to_main_menu(frame),
-                EditImageEvent::Nil => (),
+                FrameEvent::Aborted => self.switch_to_main_menu(frame),
+                FrameEvent::Nil => (),
             }
         } else {
             unreachable!();
@@ -423,14 +424,14 @@ impl GlobalGuiState {
         self.pending_save_request = Some((rx, image));
     }
 
-    ///In seguito alla creazione di una richiesta di salvataggio, gestisce l'attesa (ripetendo 
+    ///In seguito alla creazione di una richiesta di salvataggio, gestisce l'attesa (ripetendo
     /// la chiamata di <i>try_recv()</i>) che il thread demandato a gestire il file dialog
     /// invii sul canale.
     /// Quando la option viene ricevuta sul canale:
     /// - se è Some(path), avvia il thread che salverà l'immagine presso il path ricevuto e cambia
     ///     lo stato della gui in <i>EnumGuiState::Saving</i>;
     /// - se è None, elimina la richiesta di salvataggio.
-    /// Se il canale si è chiuso, segnala l'errore. 
+    /// Se il canale si è chiuso, segnala l'errore.
     fn wait_output_file_path(&mut self) {
         if let Some((rx, _)) = &self.pending_save_request {
             match rx.try_recv() {
@@ -558,8 +559,9 @@ impl eframe::App for GlobalGuiState {
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         //if crate::DEBUG {print!("gui refresh. ");}
 
-        let main_window_enabled =
-            self.alert.borrow().is_none() && self.pending_save_request.is_none() && self.directory_dialog_receiver.is_none();
+        let main_window_enabled = self.alert.borrow().is_none()
+            && self.pending_save_request.is_none()
+            && self.directory_dialog_receiver.is_none();
 
         //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys
         if self.hotkey_receiver.is_none() {
@@ -630,8 +632,7 @@ impl eframe::App for GlobalGuiState {
             if self.pending_save_request.is_some() {
                 self.wait_output_file_path();
                 ctx.request_repaint();
-            }else if self.directory_dialog_receiver.is_some()
-            {
+            } else if self.directory_dialog_receiver.is_some() {
                 self.wait_directory_dialog();
                 ctx.request_repaint();
             }

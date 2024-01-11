@@ -1,12 +1,7 @@
-pub mod edit_image_utils;
+pub mod utils;
 
 use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
-use edit_image_utils::{
-    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
-    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
-    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
-};
 use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
     color_picker, pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, Key, Layout,
@@ -19,13 +14,18 @@ use image::RgbaImage;
 use imageproc::drawing::Blend;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
+use utils::{
+    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
+    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
+    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
+};
 
 /// indica se e' stato premuto uno dei pulsanti Save o Abort.
 /// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
 /// Lo stato Aborted indica che e' stato premuto il pulsante Abort
 /// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
 /// (`RgbaImage`), e il suo formato (`ImageFormat`)
-pub enum EditImageEvent {
+pub enum FrameEvent {
     Saved {
         image: RgbaImage,
         format: ImageFormat,
@@ -248,21 +248,17 @@ impl EditImage {
 
     /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
     /// disegnato sulla finestra
-    pub fn update(
-        &mut self,
-        ctx: &Context,
-        enabled: bool,
-    ) -> EditImageEvent {
+    pub fn update(&mut self, ctx: &Context, enabled: bool) -> FrameEvent {
         CentralPanel::default()
             .show(ctx, |ui| match self.receive_thread.try_recv() {
-                Ok(image) => EditImageEvent::Saved {
+                Ok(image) => FrameEvent::Saved {
                     image,
                     format: self.format,
                 },
                 Err(error) => match error {
                     TryRecvError::Empty => {
                         show_loading(ctx);
-                        EditImageEvent::Nil
+                        FrameEvent::Nil
                     }
                     TryRecvError::Disconnected => {
                         ui.add_enabled_ui(enabled, |ui| {
@@ -322,14 +318,16 @@ impl EditImage {
                     assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    self.annotations.push(create_circle(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        self.annotations.push(create_circle(
+                            self.fill_shape,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        ));
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -341,17 +339,18 @@ impl EditImage {
                 if response.drag_started() {
                     *start_drag = response.hover_pos();
                 } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    self.annotations.push(create_rect(
-                        self.fill_shape,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    ));
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        self.annotations.push(create_rect(
+                            self.fill_shape,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        ));
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -363,17 +362,18 @@ impl EditImage {
                 if response.drag_started() {
                     *start_drag = response.hover_pos();
                 } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
-                    push_arrow_into_annotations(
-                        &mut self.annotations,
-                        self.scale_ratio,
-                        self.stroke,
-                        painter_rect.left_top(),
-                        start_drag.expect("should be defined"),
-                        end_drag.expect("should be defined"),
-                    );
+                    if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
+                        push_arrow_into_annotations(
+                            &mut self.annotations,
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            *start_drag,
+                            *end_drag,
+                        );
+                    }
                     *start_drag = None;
                     *end_drag = None;
                 }
@@ -489,7 +489,7 @@ impl EditImage {
     }
 
     /// disegna i bottoni principali dell'interfaccia
-    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> EditImageEvent {
+    fn draw_menu_buttons(&mut self, ui: &mut Ui) -> FrameEvent {
         ui.horizontal(|ui| {
             ui.label("Tool:");
             if ui
@@ -571,14 +571,17 @@ impl EditImage {
             ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
-                    for f in ImageFormat::available_formats().iter() 
-                    {
-                        ui.selectable_value(&mut self.format,*f, <ImageFormat as Into<&str>>::into(*f));
+                    for f in &ImageFormat::available_formats() {
+                        ui.selectable_value(
+                            &mut self.format,
+                            *f,
+                            <ImageFormat as Into<&str>>::into(*f),
+                        );
                     }
                 });
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
                 if ui.button("Abort").clicked() {
-                    EditImageEvent::Aborted
+                    FrameEvent::Aborted
                 } else if ui.button("Save").clicked() {
                     let (tx, rx) = channel();
                     self.receive_thread = rx;
@@ -601,9 +604,9 @@ impl EditImage {
                             .to_image(),
                         )
                     });
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 } else {
-                    EditImageEvent::Nil
+                    FrameEvent::Nil
                 }
             })
             .inner
