@@ -41,7 +41,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// Possibili valori dello stato interno della macchina a stati realizzata dalla struct <i>GlobalGuiState</i>.
@@ -177,14 +177,19 @@ impl GlobalGuiState {
         }
     }
 
-    /// Data una richiesta di screenshot, se essa include un delay non nullo, rende invisibile l'applicazione e
-    /// lancia il thread che esegue la sleep relativa.
+    /// Data una richiesta di screenshot, rende invisibile l'applicazione e
+    /// lancia il thread che esegue una sleep.<br/>
+    /// La durata della sleep corrisponde a:
+    /// - il parametro <i>d</i>, che corrisponde al delay impostato dall'utente, se <i>d>0</i>;
+    /// - il tempo impiegato alle animazioni del sistema operativo per rendere invisibile
+    /// la finestra, se <i>d==0</i>.
     ///
+    /// <i>NOTA: l'applicazione rimane nello stato WaitingForDelay per un frame soltanto,
+    /// ma il passaggio è comunque necessario per eseguire il repaint e quindi
+    /// fare diventare l'applicazione invisibile.</i>
     ///
     /// Cambia lo stato in <i>EnumGuiState::WaitingForDelay</i>, in cui è memorizzato, assieme all'informazione
-    /// <i>ScreenshotDim</i> una option contenente:
-    /// - None, se il delay associato alla richiesta di screenshot era nullo;
-    /// - altrimenti, il JoinHandle relativo al thread appena lanciato.
+    /// <i>ScreenshotDim</i> il <i>JoinHandle</i> del thread.
     fn start_wait_delay(
         &mut self,
         d: f64,
@@ -192,15 +197,17 @@ impl GlobalGuiState {
         frame: &mut eframe::Frame,
         ctx: &eframe::egui::Context,
     ) {
-        let mut jh = None;
-        if d > 0.0 {
-            frame.set_visible(false);
-            ctx.request_repaint();
-            jh = Some(std::thread::spawn(move || {
-                thread::sleep(Duration::from_secs_f64(d));
-            }));
-        }
-        self.state = EnumGuiState::WaitingForDelay(jh, area.clone());
+        let jh = std::thread::spawn(move || {
+            let duration = if d > 0.0 {
+                Duration::from_secs_f64(d)
+            } else {
+                super::itc::get_animations_delay()
+            };
+            std::thread::sleep(duration);
+        });
+        frame.set_visible(false);
+        ctx.request_repaint();
+        self.state = EnumGuiState::WaitingForDelay(Some(jh), area.clone());
     }
 
     /// Se nello stato corrente è memorizzato un JoinHandle, esegue <i>join()</i>, mettendo di fatto in attesa la gui (che intanto non è visibile)
@@ -211,27 +218,26 @@ impl GlobalGuiState {
     ///
     /// <h3>Panics:</h3>
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::WaitingForDelay</i>.
+    /// Nel caso <i>Option<JoinHandle>></i> == None.
     fn wait_delay(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         if let EnumGuiState::WaitingForDelay(opt_jh, area) = &mut self.state {
-            let area_clone = area.clone();
-            let temp = opt_jh.take();
-            if let Some(jh) = temp {
-                match jh.join() {
-                    Ok(_) => {
-                        frame.set_visible(true);
-                    }
-                    _ => {
-                        self.alert.borrow_mut().replace("Timer error".to_string());
-                        self.switch_to_main_menu(frame);
+            let jh = opt_jh.take().unwrap();
+            match jh.join() {
+                Ok(_) => {
+                    frame.set_visible(true);
+                    match *area {
+                        ScreenshotDim::Fullscreen => {
+                            self.switch_to_edit_image(None, ctx, frame);
+                        }
+                        ScreenshotDim::Rectangle => {
+                            self.switch_to_rect_selection(ctx);
+                        }
                     }
                 }
-            }
-            match area_clone {
-                ScreenshotDim::Fullscreen => {
-                    self.switch_to_edit_image(None, ctx, frame);
-                }
-                ScreenshotDim::Rectangle => {
-                    self.switch_to_rect_selection(ctx);
+                _ => {
+                    self.alert.borrow_mut().replace("Timer error".to_string());
+                    self.switch_to_main_menu(frame);
+                    frame.set_visible(true);
                 }
             }
         }
@@ -247,8 +253,7 @@ impl GlobalGuiState {
             println!("nframe (switch to rect selection): {}", ctx.frame_nr());
         }
         self.state = EnumGuiState::LoadingRectSelection(
-            self.screens_manager
-                .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+            self.screens_manager.start_thread_fullscreen_screenshot(),
         );
     }
 
@@ -341,8 +346,7 @@ impl GlobalGuiState {
             frame.set_visible(false);
             ctx.request_repaint();
             self.state = EnumGuiState::LoadingEditImage(
-                self.screens_manager
-                    .start_thread_fullscreen_screenshot(super::itc::get_animations_delay()),
+                self.screens_manager.start_thread_fullscreen_screenshot(),
             );
         }
     }
