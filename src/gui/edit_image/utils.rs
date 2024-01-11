@@ -97,7 +97,6 @@ pub fn make_rect_legal(rect: &mut Rect) {
 /// oscura lo schermo eccetto l'area ritagliata. Lo spessore e il colore del bordo possono essere personalizzati con il
 /// parametro stroke
 pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke) {
-    // todo: there are two white vertical lines to be removed
     painter.rect_filled(
         {
             let mut rect = painter.clip_rect();
