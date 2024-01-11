@@ -97,7 +97,6 @@ pub fn make_rect_legal(rect: &mut Rect) {
 /// oscura lo schermo eccetto l'area ritagliata. Lo spessore e il colore del bordo possono essere personalizzati con il
 /// parametro stroke
 pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke) {
-    // todo: there are two white vertical lines to be removed
     painter.rect_filled(
         {
             let mut rect = painter.clip_rect();
@@ -196,7 +195,6 @@ pub fn create_rect(
     end_drag: Pos2,
 ) -> Shape {
     if filled {
-        // todo: there is a bug in the width that seems to not be positive.
         Shape::Rect(RectShape::filled(
             unscaled_rect(
                 top_left,
@@ -433,8 +431,7 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
                 *point = scaled_point(top_left, scale_ratio, *point);
             }
         }
-        // todo: set description of reachability
-        _ => unreachable!(),
+        _ => unreachable!("This type of shape is not supposed to be managed"),
     }
 }
 
@@ -465,7 +462,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
         Shape::LineSegment { points, stroke } => {
             let polygon_points = line_width_to_polygon(points, stroke.width / 2.0);
             if !(polygon_points[0] == polygon_points[3]) {
-                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()))
+                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()));
             }
         }
         Shape::Circle(circle_shape) => {
@@ -477,6 +474,8 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
     }
 }
 
+/// Scrive sull'immagine in memoria un rettangolo.
+/// In particolare, gestisce anche il caso di rettangoli con bordo spesso (spessore diverso da 1 pixel)
 fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
     draw_filled_rect_mut(
         image_blend,
@@ -502,6 +501,8 @@ fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &R
     }
 }
 
+/// Scrive sull'immagine in memoria un cerchio.
+/// In particolare, gestisce anche il caso di cerchi con bordo spesso (spessore diverso da 1 pixel)
 fn write_circle_with_width(image_blend: &mut Blend<RgbaImage>, circle_shape: &CircleShape) {
     draw_filled_circle_mut(
         image_blend,

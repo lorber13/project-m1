@@ -23,7 +23,7 @@ use utils::{
 /// indica se e' stato premuto uno dei pulsanti Save o Abort.
 /// Lo stato Nil indica che non e' stato premuto nessuno dei due pulsanti
 /// Lo stato Aborted indica che e' stato premuto il pulsante Abort
-/// Lo stato Saved indica che e' stato premuto il pulsante Save. In questo caso, verra' ritornata l'immagine da salvare
+/// Lo stato Saved indica che e' stato premuto il pulsante Save; in questo caso, verrà ritornata l'immagine da salvare
 /// (`RgbaImage`), e il suo formato (`ImageFormat`)
 pub enum FrameEvent {
     Saved {
@@ -58,10 +58,6 @@ enum Tool {
     Cut {
         modifying: ModificationOfRectangle,
     },
-    /* todo:
-       text, very difficult
-       rubber, not mandatory but recommended
-    */
 }
 
 /// rappresenta lo stato interno al Tool di ritaglio. Se siamo in ritaglio, per ogni frame,
@@ -228,7 +224,7 @@ impl EditImage {
         painter.extend(annotations);
     }
 
-    /// ad ogni frame ricalcola il fattore di scalatura dell'immagine (ad ogni frame la dimensione della finestra puo'
+    /// ad ogni frame ricalcola il fattore di scala dell'immagine (ad ogni frame la dimensione della finestra puo'
     /// variare)
     fn update_scale_ratio(&mut self, ui: &mut Ui) {
         let available_size = ui.available_size_before_wrap();
@@ -378,14 +374,11 @@ impl EditImage {
                     *end_drag = None;
                 }
             }
-            // todo: while dragging, the rectangle must not become a negative rectangle
             Tool::Cut { modifying } => {
                 match modifying {
                     ModificationOfRectangle::Move => {
                         ctx.set_cursor_icon(CursorIcon::Grabbing);
                         if response.dragged() {
-                            // todo: work in painter dimensions, not real dimensions
-                            // todo: refine the function that makes the rectangle not escape borders
                             self.translate_rect(response);
                         } else if response.drag_released() {
                             *modifying = ModificationOfRectangle::NoModification;
@@ -455,7 +448,8 @@ impl EditImage {
         }
     }
 
-    /// trasla il rettangolo di ritaglio. Se il rettangolo di ritaglio viene portato fuori dai bordi, viene ritraslato
+    /// trasla il rettangolo di ritaglio.
+    /// Se il rettangolo di ritaglio viene portato fuori dai bordi, viene riposizionato
     /// automaticamente sul bordo piu' vicino
     fn translate_rect(&mut self, response: &Response) {
         let image_rect = Rect::from_min_size(pos2(0.0, 0.0), self.texture_handle.size_vec2());
@@ -468,7 +462,7 @@ impl EditImage {
         }
     }
 
-    /// ritrasla automaticamente il rettangolo di ritaglio sul bordo piu' vicino
+    /// riposiziona automaticamente il rettangolo di ritaglio sul bordo piu' vicino
     fn align_rect_to_borders(&mut self, image_rect: Rect, translated_rect: Rect) {
         self.cut_rect = translated_rect.translate({
             let mut vec = Vec2::default();
