@@ -81,7 +81,7 @@ pub struct RegisteredHotkeys {
     ///digitazione delle hotkeys.
     backup: Vec<RwLock<Option<(HotKey, String)>>>,
     ///Copia di "brutta" del vettore di Hotkeys, modificato direttamente durante il settaggio delle impostazioni.
-    pub vec: Vec<RwLock<Option<String>>>,
+    vec: Vec<RwLock<Option<String>>>,
     ///Mette a disposizione i metodi per attivare/disattivare l'effettivo ascolto delle hotkeys.
     ghm: GlobalHotKeyManager,
     ///Per disattivare temporaneamente le Hotkeys senza dover richiamare <i>unregister()</i>.
