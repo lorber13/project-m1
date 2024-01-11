@@ -58,10 +58,6 @@ enum Tool {
     Cut {
         modifying: ModificationOfRectangle,
     },
-    /* todo:
-       text, very difficult
-       rubber, not mandatory but recommended
-    */
 }
 
 /// rappresenta lo stato interno al Tool di ritaglio. Se siamo in ritaglio, per ogni frame,
@@ -378,14 +374,11 @@ impl EditImage {
                     *end_drag = None;
                 }
             }
-            // todo: while dragging, the rectangle must not become a negative rectangle
             Tool::Cut { modifying } => {
                 match modifying {
                     ModificationOfRectangle::Move => {
                         ctx.set_cursor_icon(CursorIcon::Grabbing);
                         if response.dragged() {
-                            // todo: work in painter dimensions, not real dimensions
-                            // todo: refine the function that makes the rectangle not escape borders
                             self.translate_rect(response);
                         } else if response.drag_released() {
                             *modifying = ModificationOfRectangle::NoModification;

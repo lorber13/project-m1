@@ -463,7 +463,7 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
         Shape::LineSegment { points, stroke } => {
             let polygon_points = line_width_to_polygon(points, stroke.width / 2.0);
             if !(polygon_points[0] == polygon_points[3]) {
-                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()))
+                draw_polygon_mut(image_blend, &polygon_points, Rgba(stroke.color.to_array()));
             }
         }
         Shape::Circle(circle_shape) => {
