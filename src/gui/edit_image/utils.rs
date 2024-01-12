@@ -185,6 +185,16 @@ pub fn create_circle(
     }
 }
 
+pub fn create_line(scale_ratio: f32, stroke: Stroke, top_left: Pos2, points: [Pos2; 2]) -> Shape {
+    Shape::LineSegment {
+        points: [
+            unscaled_point(top_left, scale_ratio, points[0]),
+            unscaled_point(top_left, scale_ratio, points[1]),
+        ],
+        stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
+    }
+}
+
 /// crea un rettangolo (colorato o solo bordo) in scala rispetto alle dimensioni effettive dell'immagine
 pub fn create_rect(
     filled: bool,
@@ -217,47 +227,47 @@ pub fn create_rect(
     }
 }
 
-/// crea una freccia in scala rispetto all'immagine, che viene inserita nel gruppo di annotazioni come un insieme di
-/// tre segmenti
-pub fn push_arrow_into_annotations(
-    annotations: &mut Vec<Shape>,
+/// crea una freccia in scala rispetto all'immagine, come insieme di tre segmenti
+pub fn create_arrow(
     scale_ratio: f32,
     stroke: Stroke,
     top_left: Pos2,
     start_drag: Pos2,
     end_drag: Pos2,
-) {
+) -> Shape {
     let vec = end_drag - start_drag;
     let origin = start_drag;
     let rot = Rot2::from_angle(std::f32::consts::TAU / 10.0);
     let tip_length = vec.length() / 4.0;
     let tip = origin + vec;
     let dir = vec.normalized();
-    annotations.push(Shape::LineSegment {
-        points: [
-            unscaled_point(top_left, scale_ratio, origin),
-            unscaled_point(top_left, scale_ratio, tip),
-        ],
-        stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
-    });
-    annotations.push(Shape::LineSegment {
-        points: [
-            unscaled_point(top_left, scale_ratio, tip),
-            unscaled_point(top_left, scale_ratio, tip - tip_length * (rot * dir)),
-        ],
-        stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
-    });
-    annotations.push(Shape::LineSegment {
-        points: [
-            unscaled_point(top_left, scale_ratio, tip),
-            unscaled_point(
-                top_left,
-                scale_ratio,
-                tip - tip_length * (rot.inverse() * dir),
-            ),
-        ],
-        stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
-    });
+    Shape::Vec(vec![
+        Shape::LineSegment {
+            points: [
+                unscaled_point(top_left, scale_ratio, origin),
+                unscaled_point(top_left, scale_ratio, tip),
+            ],
+            stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
+        },
+        Shape::LineSegment {
+            points: [
+                unscaled_point(top_left, scale_ratio, tip),
+                unscaled_point(top_left, scale_ratio, tip - tip_length * (rot * dir)),
+            ],
+            stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
+        },
+        Shape::LineSegment {
+            points: [
+                unscaled_point(top_left, scale_ratio, tip),
+                unscaled_point(
+                    top_left,
+                    scale_ratio,
+                    tip - tip_length * (rot.inverse() * dir),
+                ),
+            ],
+            stroke: Stroke::new(stroke.width / scale_ratio, stroke.color),
+        },
+    ])
 }
 
 /// ridimensiona il rettangolo in base alla direzione di ridimensionamento. A seconda della direzione in cui si sta
@@ -431,6 +441,11 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
                 *point = scaled_point(top_left, scale_ratio, *point);
             }
         }
+        Shape::Vec(shapes) => {
+            for shape in shapes {
+                scale_annotation(shape, scale_ratio, top_left);
+            }
+        }
         _ => unreachable!("This type of shape is not supposed to be managed"),
     }
 }
@@ -467,6 +482,11 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
         }
         Shape::Circle(circle_shape) => {
             write_circle_with_width(image_blend, circle_shape);
+        }
+        Shape::Vec(shapes) => {
+            for shape in shapes {
+                write_annotation_to_image(shape, image_blend);
+            }
         }
         _ => {
             unreachable!("These are the only shapes which have to be used")

@@ -1,5 +1,6 @@
 pub mod utils;
 
+use crate::gui::edit_image::utils::create_line;
 use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
 use eframe::egui::color_picker::Alpha;
@@ -15,9 +16,9 @@ use imageproc::drawing::Blend;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 use utils::{
-    create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
-    push_arrow_into_annotations, resize_rectangle, scale_annotation, scaled_rect, set_cursor,
-    stroke_ui_opaque, unscaled_point, write_annotation_to_image, Direction,
+    create_arrow, create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
+    resize_rectangle, scale_annotation, scaled_rect, set_cursor, stroke_ui_opaque, unscaled_point,
+    write_annotation_to_image, Direction,
 };
 
 /// indica se e' stato premuto uno dei pulsanti Save o Abort.
@@ -42,6 +43,10 @@ pub enum FrameEvent {
 enum Tool {
     Pen {
         line: Vec<Pos2>,
+    },
+    Line {
+        first_point: Option<Pos2>,
+        second_point: Option<Pos2>,
     },
     Circle {
         start_drag: Option<Pos2>,
@@ -114,6 +119,36 @@ impl EditImage {
         }
     }
 
+    /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
+    /// disegnato sulla finestra
+    pub fn update(&mut self, ctx: &Context, enabled: bool) -> FrameEvent {
+        CentralPanel::default()
+            .show(ctx, |ui| match self.receive_thread.try_recv() {
+                Ok(image) => FrameEvent::Saved {
+                    image,
+                    format: self.format,
+                },
+                Err(error) => match error {
+                    TryRecvError::Empty => {
+                        show_loading(ctx);
+                        FrameEvent::Nil
+                    }
+                    TryRecvError::Disconnected => {
+                        ui.add_enabled_ui(enabled, |ui| {
+                            let ret = self.draw_menu_buttons(ui);
+                            ui.separator();
+                            let (response, painter) = self.allocate_scaled_painter(ui);
+                            self.handle_events(ctx, &response, painter.clip_rect());
+                            self.display_annotations(&painter);
+                            ret
+                        })
+                        .inner
+                    }
+                },
+            })
+            .inner
+    }
+
     /// crea un oggetto Painter, scalato in base alle dimensioni della finestra al frame corrente
     fn allocate_scaled_painter(&mut self, ui: &mut Ui) -> (Response, Painter) {
         self.update_scale_ratio(ui);
@@ -169,6 +204,17 @@ impl EditImage {
         match &self.current_tool {
             Tool::Pen { line } => {
                 painter.add(Shape::line(line.clone(), self.stroke));
+            }
+            Tool::Line {
+                first_point,
+                second_point,
+            } => {
+                if let (Some(first_point), Some(second_point)) = (first_point, second_point) {
+                    painter.add(Shape::LineSegment {
+                        points: [*first_point, *second_point],
+                        stroke: self.stroke,
+                    });
+                }
             }
             Tool::Circle {
                 start_drag,
@@ -242,36 +288,6 @@ impl EditImage {
         };
     }
 
-    /// questa e' la funzione di ingresso. Ad ogni frame viene chiamata questa funzione che determina che cosa va
-    /// disegnato sulla finestra
-    pub fn update(&mut self, ctx: &Context, enabled: bool) -> FrameEvent {
-        CentralPanel::default()
-            .show(ctx, |ui| match self.receive_thread.try_recv() {
-                Ok(image) => FrameEvent::Saved {
-                    image,
-                    format: self.format,
-                },
-                Err(error) => match error {
-                    TryRecvError::Empty => {
-                        show_loading(ctx);
-                        FrameEvent::Nil
-                    }
-                    TryRecvError::Disconnected => {
-                        ui.add_enabled_ui(enabled, |ui| {
-                            let ret = self.draw_menu_buttons(ui);
-                            ui.separator();
-                            let (response, painter) = self.allocate_scaled_painter(ui);
-                            self.handle_events(ctx, &response, painter.clip_rect());
-                            self.display_annotations(&painter);
-                            ret
-                        })
-                        .inner
-                    }
-                },
-            })
-            .inner
-    }
-
     /// gestisce lo stato dell'applicazione sulla base degli eventi che accadono al frame corrente. In base al tool in
     /// uso, viene aggiornato lo stato dell'annotazione che sta venendo disegnata. Se si tratta per esempio di una
     /// linea, viene allungata aggiungendo la posizione del cursore al frame corrente.
@@ -304,6 +320,27 @@ impl EditImage {
                     *line = Vec::new();
                 }
             }
+            Tool::Line {
+                first_point,
+                second_point,
+            } => {
+                if response.drag_started() {
+                    *first_point = response.hover_pos();
+                } else if response.dragged() {
+                    *second_point = ctx.pointer_hover_pos();
+                } else if response.drag_released() {
+                    if let (Some(first), Some(second)) = (&first_point, &second_point) {
+                        self.annotations.push(create_line(
+                            self.scale_ratio,
+                            self.stroke,
+                            painter_rect.left_top(),
+                            [*first, *second],
+                        ));
+                    }
+                    *first_point = None;
+                    *second_point = None;
+                }
+            }
             Tool::Circle {
                 start_drag,
                 end_drag,
@@ -311,7 +348,6 @@ impl EditImage {
                 if response.drag_started() {
                     *start_drag = response.hover_pos();
                 } else if response.dragged() {
-                    assert!(ctx.pointer_hover_pos().is_some());
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
                     if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
@@ -361,14 +397,13 @@ impl EditImage {
                     *end_drag = ctx.pointer_hover_pos();
                 } else if response.drag_released() {
                     if let (Some(start_drag), Some(end_drag)) = (&start_drag, &end_drag) {
-                        push_arrow_into_annotations(
-                            &mut self.annotations,
+                        self.annotations.push(create_arrow(
                             self.scale_ratio,
                             self.stroke,
                             painter_rect.left_top(),
                             *start_drag,
                             *end_drag,
-                        );
+                        ));
                     }
                     *start_drag = None;
                     *end_drag = None;
@@ -441,11 +476,7 @@ impl EditImage {
     }
 
     fn remove_annotation(&mut self) {
-        let annotation = self.annotations.pop();
-        if let Some(Shape::LineSegment { .. }) = annotation {
-            self.annotations.pop();
-            self.annotations.pop();
-        }
+        self.annotations.pop();
     }
 
     /// trasla il rettangolo di ritaglio.
@@ -511,6 +542,15 @@ impl EditImage {
                 self.current_tool = Tool::Pen { line: Vec::new() };
             }
             if ui
+                .selectable_label(matches!(self.current_tool, Tool::Line { .. }), "line")
+                .clicked()
+            {
+                self.current_tool = Tool::Line {
+                    first_point: None,
+                    second_point: None,
+                }
+            }
+            if ui
                 .selectable_label(matches!(self.current_tool, Tool::Arrow { .. }), "arrow")
                 .clicked()
             {
@@ -555,7 +595,7 @@ impl EditImage {
                 });
             }
             (Tool::Rect { .. } | Tool::Circle { .. }, false)
-            | (Tool::Pen { .. } | Tool::Arrow { .. }, _) => {
+            | (Tool::Pen { .. } | Tool::Line { .. } | Tool::Arrow { .. }, _) => {
                 stroke_ui_opaque(ui, &mut self.stroke);
             }
             (Tool::Cut { .. }, _) => {}
