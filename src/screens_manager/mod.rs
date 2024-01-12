@@ -10,7 +10,6 @@ Per praticità, il modulo mette a disposizione la possibilità di memorizzare qu
 use image::{imageops::FilterType, RgbaImage};
 use screenshots::{DisplayInfo, Screen};
 use std::io::Write;
-use std::time::Duration;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 
@@ -118,18 +117,15 @@ impl ScreensManager {
     }
 
     ///Lancia un thread che:
-    ///- attende il delay passato come parametro;
     ///- esegue uno screenshot sullo schermo attualmente selezionato;
     ///- invia l'immagine sul canale il cui <i>Receiver</i> è ritornato dal metodo corrente.
     ///Oppure invia sul canale un messaggio di errore.
     pub fn start_thread_fullscreen_screenshot(
         self: &Arc<Self>,
-        delay: Duration, 
     ) -> Receiver<Result<RgbaImage, &'static str>> {
         let (tx, rx) = channel();
         let sc = self.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(delay);
             tx.send(sc.fullscreen_screenshot()).expect(
                 "thread performing fullscreen screenshot was not able to send throught the channel",
             );

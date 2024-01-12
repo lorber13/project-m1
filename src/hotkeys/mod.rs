@@ -200,7 +200,8 @@ impl RegisteredHotkeys {
         rx
     }
 
-    ///Esegue un ciclo su tutte le hotkeys registrate e le confronta con quella passata.
+    ///Esegue un ciclo su tutte le hotkeys memorizzate nella bozza (<i>self::vec</i>) 
+    /// e le confronta con quella passata come parametro.
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
