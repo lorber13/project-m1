@@ -567,12 +567,12 @@ impl EditImage {
                 };
             }
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                if ui.button("undo").clicked() {
-                    self.remove_annotation();
-                }
-                if ui.button("clear").clicked() {
+                if ui.button("❌").on_hover_text("Clear").clicked() {
                     self.annotations = Vec::new();
                 }
+                if ui.button("↺").on_hover_text("Undo").clicked() {
+                    self.remove_annotation();
+                }   
             });
         });
         if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
@@ -600,21 +600,11 @@ impl EditImage {
             (Tool::Cut { .. }, _) => {}
         }
         ui.horizontal(|ui| {
-            ui.label("Format:");
-            ComboBox::from_label("") //menù a tendina per la scelta del formato di output
-                .selected_text(format!("{:?}", self.format))
-                .show_ui(ui, |ui| {
-                    for f in &ImageFormat::available_formats() {
-                        ui.selectable_value(
-                            &mut self.format,
-                            *f,
-                            <ImageFormat as Into<&str>>::into(*f),
-                        );
-                    }
-                });
+            
             ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                let mut ret = FrameEvent::Nil;
                 if ui.button("Abort").clicked() {
-                    FrameEvent::Aborted
+                    ret = FrameEvent::Aborted;
                 } else if ui.button("Save").clicked() {
                     let (tx, rx) = channel();
                     self.receive_thread = rx;
@@ -637,10 +627,20 @@ impl EditImage {
                             .to_image(),
                         )
                     });
-                    FrameEvent::Nil
-                } else {
-                    FrameEvent::Nil
                 }
+                ComboBox::from_label("") //menù a tendina per la scelta del formato di output
+                .selected_text(format!("{:?}", self.format))
+                .show_ui(ui, |ui| {
+                    for f in &ImageFormat::available_formats() {
+                        ui.selectable_value(
+                            &mut self.format,
+                            *f,
+                            <ImageFormat as Into<&str>>::into(*f),
+                        );
+                    }
+                });
+                ui.label("Format:");
+                ret
             })
             .inner
         })
