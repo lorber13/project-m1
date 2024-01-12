@@ -1,6 +1,6 @@
 use crate::gui::edit_image::utils::obscure_screen;
 use eframe::egui;
-use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle};
+use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle, TextureOptions};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Sense, Vec2};
 use image::RgbaImage;
 
@@ -30,7 +30,7 @@ impl RectSelection {
                     [rgba.width() as usize, rgba.height() as usize],
                     rgba.as_raw(),
                 ),
-                Default::default(),
+                TextureOptions::default(),
             ),
             rgba,
             start_drag_point: None,
@@ -71,34 +71,40 @@ impl RectSelection {
                 if response.drag_started() {
                     self.start_drag_point = response.hover_pos();
                 } else if response.dragged() {
-                    if let (Some(click_pos), Some(hover_pos)) = (self.start_drag_point, ctx.pointer_hover_pos()) {
+                    if let (Some(click_pos), Some(hover_pos)) =
+                        (self.start_drag_point, ctx.pointer_hover_pos())
+                    {
                         rect_not_to_be_obscured = Rect::from_points(&[click_pos, hover_pos]);
                     }
                 } else if response.drag_released() {
-                    if let (Some(click_pos), Some(hover_pos)) = (self.start_drag_point, ctx.pointer_hover_pos()) {
-                        ret = Some(
-                            (
-                                // todo: with HiDPI screens using scaling the rectangle is wrong
-                                // different displays have different pixels_per_point
-                                Rect::from_points(&[
-                                    pos2(
-                                        click_pos.x * ctx.pixels_per_point(),
-                                        click_pos.y * ctx.pixels_per_point(),
-                                    ),
-                                    pos2(
-                                        hover_pos.x * ctx.pixels_per_point(),
-                                        hover_pos.y * ctx.pixels_per_point(),
-                                    )
-                                ]),
-                                self.rgba.clone(), /* I am obliged
-                                to clone the attribute because it is needed for the next frame
-                                (it is not obvious that the next frame the status of the app is immediately changed */
-                            ),
-                        );
+                    if let (Some(click_pos), Some(hover_pos)) =
+                        (self.start_drag_point, ctx.pointer_hover_pos())
+                    {
+                        ret = Some((
+                            // todo: with HiDPI screens using scaling the rectangle is wrong
+                            // different displays have different pixels_per_point
+                            Rect::from_points(&[
+                                pos2(
+                                    click_pos.x * ctx.pixels_per_point(),
+                                    click_pos.y * ctx.pixels_per_point(),
+                                ),
+                                pos2(
+                                    hover_pos.x * ctx.pixels_per_point(),
+                                    hover_pos.y * ctx.pixels_per_point(),
+                                ),
+                            ]),
+                            self.rgba.clone(), // I am obliged
+                                               // to clone the attribute because it is needed for the next frame
+                                               // (it is not obvious that the next frame the status of the app is immediately changed
+                        ));
                     }
                 }
             }
-            obscure_screen(&painter, rect_not_to_be_obscured, Stroke::new(3.0, Color32::WHITE));
+            obscure_screen(
+                &painter,
+                rect_not_to_be_obscured,
+                Stroke::new(3.0, Color32::WHITE),
+            );
         });
         ret
     }
