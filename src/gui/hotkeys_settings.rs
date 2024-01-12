@@ -81,7 +81,6 @@ impl HotkeysSettings
             if let Err(e) = r {self.alert.borrow_mut().replace(e.to_string()); break;}
         }
 
-
         //controllo se è in corso la registrazione di una hotkey
         if let HotkeySettingsState::Registering(hn) = &mut self.state
         {
@@ -91,10 +90,7 @@ impl HotkeysSettings
                 let str_kh = new_hk.format(&eframe::egui::ModifierNames::NAMES, std::env::consts::OS == "macos" );
                 self.state = HotkeySettingsState::Idle;
                 self.registered_hotkeys.request_register(str_kh, hn_clone, self.workers_channel.0.clone());
-            }else {
-                    self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
-                    self.state = HotkeySettingsState::Idle;
-                }
+            }
         }
         
 
@@ -211,6 +207,9 @@ impl HotkeysSettings
                 if modifiers.any() && !(*repeat)
                 {
                     ret = Some(KeyboardShortcut::new(*modifiers, *key));
+                }else {
+                    self.alert.borrow_mut().replace("Invalid shortcut. Please follow the instructions.".to_string());
+                    self.state = HotkeySettingsState::Idle;
                 }
             }
         }

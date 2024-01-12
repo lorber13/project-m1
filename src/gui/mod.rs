@@ -230,12 +230,13 @@ impl GlobalGuiState {
             let jh = opt_jh.take().unwrap();
             match jh.join() {
                 Ok(_) => {
-                    frame.set_visible(true);
                     match *area {
                         ScreenshotDim::Fullscreen => {
+                            frame.set_visible(true);
                             self.switch_to_edit_image(None, ctx, frame);
                         }
                         ScreenshotDim::Rectangle => {
+                            frame.set_visible(false);
                             self.switch_to_rect_selection(ctx);
                         }
                     }
