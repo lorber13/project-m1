@@ -1,7 +1,7 @@
 use crate::gui::edit_image::utils::obscure_screen;
 use eframe::egui;
 use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle};
-use egui::{pos2, Color32, ColorImage, Pos2, Rect, Rounding, Sense, Vec2};
+use egui::{pos2, Color32, ColorImage, Pos2, Rect, Sense, Vec2};
 use image::RgbaImage;
 
 /// Struct che memorizza lo stato del componente della gui che mette a disposizione un'interfaccia per limitare lo screenshot
@@ -64,42 +64,31 @@ impl RectSelection {
             );
 
             ctx.set_cursor_icon(CursorIcon::Crosshair);
+
+            // by default, obscure all the screen (so the default rectangle to save must be empty)
+            let mut rect_not_to_be_obscured = Rect::from_min_size(Pos2::ZERO, Vec2::ZERO);
             if !response.clicked() {
                 if response.drag_started() {
                     self.start_drag_point = response.hover_pos();
-                    painter.rect_filled(
-                        painter.clip_rect(),
-                        Rounding::none(),
-                        Color32::from_black_alpha(200),
-                    );
                 } else if response.dragged() {
-                    if let Some(pos) = self.start_drag_point {
-                        obscure_screen(
-                            &painter,
-                            Rect::from_points(&[pos, response.hover_pos().expect("error")]),
-                            Stroke::new(3.0, Color32::WHITE),
-                        );
+                    if let (Some(click_pos), Some(hover_pos)) = (self.start_drag_point, ctx.pointer_hover_pos()) {
+                        rect_not_to_be_obscured = Rect::from_points(&[click_pos, hover_pos]);
                     }
                 } else if response.drag_released() {
-                    if let Some(pos) = self.start_drag_point {
+                    if let (Some(click_pos), Some(hover_pos)) = (self.start_drag_point, ctx.pointer_hover_pos()) {
                         ret = Some(
                             (
                                 // todo: with HiDPI screens using scaling the rectangle is wrong
                                 // different displays have different pixels_per_point
                                 Rect::from_points(&[
                                     pos2(
-                                        pos.x * ctx.pixels_per_point(),
-                                        pos.y * ctx.pixels_per_point(),
+                                        click_pos.x * ctx.pixels_per_point(),
+                                        click_pos.y * ctx.pixels_per_point(),
                                     ),
-                                    response
-                                        .hover_pos()
-                                        .map(|pos| {
-                                            pos2(
-                                                pos.x * ctx.pixels_per_point(),
-                                                pos.y * ctx.pixels_per_point(),
-                                            )
-                                        })
-                                        .expect("error"),
+                                    pos2(
+                                        hover_pos.x * ctx.pixels_per_point(),
+                                        hover_pos.y * ctx.pixels_per_point(),
+                                    )
                                 ]),
                                 self.rgba.clone(), /* I am obliged
                                 to clone the attribute because it is needed for the next frame
@@ -107,20 +96,9 @@ impl RectSelection {
                             ),
                         );
                     }
-                } else {
-                    painter.rect_filled(
-                        painter.clip_rect(),
-                        Rounding::none(),
-                        Color32::from_black_alpha(200),
-                    );
                 }
-            } else {
-                painter.rect_filled(
-                    painter.clip_rect(),
-                    Rounding::none(),
-                    Color32::from_black_alpha(200),
-                );
             }
+            obscure_screen(&painter, rect_not_to_be_obscured, Stroke::new(3.0, Color32::WHITE));
         });
         ret
     }
