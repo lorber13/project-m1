@@ -87,7 +87,7 @@ impl SaveSettings
     /// nome di default possono essere abilitati o disabilitati, quindi esistono quattro possibili casistiche:<br>
     ///
     /// (default_dir, default_name) =
-    /// - <i>(Some(..), Some(..))</i>: non è necessario mostrare all'user nessun file dialog perchè il path di salvataggio è
+    /// - <i>(Some(..), Some(..))</i>: non è necessario mostrare all'user nessun file dialog perché il path di salvataggio è
     ///     già conosciuto;
     /// - <i>(None, Some(..))</i>: viene mostrato un directory dialog;
     /// - <i>(Some(..), None)</i>: viene mostrato un file dialog che di default apre la default_dir, ma potenzialmente l'user
@@ -188,10 +188,10 @@ impl SaveSettings
         ScrollArea::new([true, false]).show(ui, |ui|
         {
             ui.separator();
-            ui.label(eframe::egui::RichText::new("Save settings").heading());
+            ui.label(egui::RichText::new("Save settings").heading());
             ui.separator();
             ui.add(egui::Checkbox::new(&mut self.default_dir.enabled, "Save all screenshot in a default directory"));
-            ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
+            ui.style_mut().spacing.button_padding = egui::vec2(12.0, 3.0);
             ui.add_enabled_ui(self.default_dir.enabled, |ui|
             {
                 ui.horizontal(|ui|
@@ -251,7 +251,7 @@ impl SaveSettings
                     if ui.button("Save").clicked() {
                         if self.default_dir.enabled && ( self.default_dir.path.is_empty() || !std::path::Path::new(&self.default_dir.path).exists())
                         {
-                            if crate::DEBUG {println!("Found an invalid dir path");}
+                            if DEBUG {println!("Found an invalid dir path");}
                             self.alert.borrow_mut().replace("Invalid default directory path.".to_string());
                         }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.is_empty()
                         {
@@ -291,7 +291,7 @@ impl SaveSettings
     ///     - Nel caso <i>self.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, calcola e formatta il timestamp
     ///         corrente e lo concatena alla stringa del default name.<br>
     ///     - Nel caso <i>self.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, concatena alla stringa del default name
-    ///         il valore del contantore, poi lo incrementa.<br> 
+    ///         il valore del contatore, poi lo incrementa.<br>
     ///         (<i>NOTA: il campo self.default_name.mode è stato inserito in 
     ///         una Cell per permettere a questo metodo di ricevere come parametro self com riferimento non mutabile, nascondendo
     ///         così il meccanismo di incremento interno del contatore</i>)
@@ -327,7 +327,7 @@ impl SaveSettings
     pub fn set_default_directory(&mut self, dir: String)
     {
         if self.default_dir.enabled {
-            if crate::DEBUG { println!("\nsetting default dir: {}", dir); }       
+            if DEBUG { println!("\nsetting default dir: {}", dir); }
             self.default_dir.path = dir;
         }   
     }
@@ -356,8 +356,8 @@ mod tests
         let res = ss.compose_output_file_path(ImageFormat::Gif).recv().unwrap();
         if let Some(path) = res
         {
-            assert!(path.extension().unwrap().to_str().unwrap() == "Gif");
-            assert!(path.file_name().unwrap().to_str().unwrap() == "dn.Gif");
+            assert_eq!(path.extension().unwrap().to_str().unwrap(), "Gif");
+            assert_eq!(path.file_name().unwrap().to_str().unwrap(), "dn.Gif");
             assert!(path.starts_with("dd"));
         }else {
             assert!(res.is_some());
@@ -371,8 +371,8 @@ mod tests
     {
         let mut ss = create_ss();
         ss.default_name.mode = Cell::new(DefaultNameMode::Counter(0));
-        assert!(ss.get_default_name().unwrap() == "dn0");
-        assert!(ss.get_default_name().unwrap() == "dn1");
-        assert!(ss.get_default_name().unwrap() == "dn2");
+        assert_eq!(ss.get_default_name().unwrap(), "dn0");
+        assert_eq!(ss.get_default_name().unwrap(), "dn1");
+        assert_eq!(ss.get_default_name().unwrap(), "dn2");
     }
 }

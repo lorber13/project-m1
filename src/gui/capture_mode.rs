@@ -27,7 +27,7 @@ impl CaptureMode {
     /// - ScreenshotDim è la modalità di selezione dell'area coinvolta nello screenshot;<br>
     /// - f64 sono i secondi di delay impostati.<br>
     /// Non è necessario che il metodo ritorni anche indicazione sullo schermo selezionato,
-    /// perchè l'informazione viene già memorizzata dentro alla variabile di tipo Arc<ScreensManager>, unica a livello di applicazione.
+    /// perché l'informazione viene già memorizzata dentro alla variabile di tipo Arc<ScreensManager>, unica a livello di applicazione.
     pub fn update(
         &mut self,
         ui: &mut egui::Ui,

@@ -39,7 +39,7 @@ pub struct MainMenu {
 }
 
 impl MainMenu {
-    /// Riceve come parametri gli smartpointer e parte dello stato globale dell'applicazione per poterlo modificare direttamente.
+    /// Riceve come parametri gli smart pointer e parte dello stato globale dell'applicazione per poterlo modificare direttamente.
     pub fn new(
         alert: Rc<RefCell<Option<String>>>,
         screens_mgr: Arc<ScreensManager>,
@@ -56,14 +56,10 @@ impl MainMenu {
     }
 
     /// Mostra:
-    /// - a sinsistra, un bottone "☰", che permette la visualizzazione del menu';
+    /// - a sinistra, un bottone "☰", che permette la visualizzazione del menu';
     /// - a destra, una schermata dipendente dalla voce del menu' selezionata.
     /// L'intero contenuto è disabilitato se il parametro enabled è settato a false.
-    pub fn update(
-        &mut self,
-        enabled: bool,
-        ctx: &Context,
-    ) -> MainMenuEvent {
+    pub fn update(&mut self, enabled: bool, ctx: &Context) -> MainMenuEvent {
         let mut ret = MainMenuEvent::Nil;
         CentralPanel::default().show(ctx, |ui| {
             ui.style_mut().spacing.button_padding = eframe::egui::vec2(12.0, 3.0);
@@ -134,14 +130,10 @@ impl MainMenu {
     ///
     /// <h3>Panics:</h3>
     /// Se <i>self.state</i> è diverso da <i>MainMenuState::CaptureMode</i>.
-    fn show_main_window(
-        &mut self,
-        ui: &mut Ui,
-        ctx: &Context,
-    ) -> MainMenuEvent {
+    fn show_main_window(&mut self, ui: &mut Ui, ctx: &Context) -> MainMenuEvent {
         let mut ret = MainMenuEvent::Nil;
         if let MainMenuState::CaptureMode(ref mut cm) = self.state {
-            //controllo l'utput della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
+            //controllo l'output della main window: se è diverso da None, significa che è stata creata una nuova richiesta di screenshot
             if let Some((area, delay)) = cm.update(ui, ctx) {
                 ret = MainMenuEvent::ScreenshotRequest(area, delay);
             }
@@ -173,7 +165,7 @@ impl MainMenu {
     /// - SettingsEvent::Saved, aggiorna lo stato globale dell'applicazione, sostituendolo con l'istanza di SaveSettings
     ///     memorizzata nello stato corrente, poi cambia lo stato di MainMenu in MainMenu::CaptureMode;
     /// - SettingsEvent::Aborted, cambia lo stato di MainMenu in MainMenu::CaptureMode;
-    /// - SettingsEevent::OpenDirectoryDialog, ritorna MainMenuEvent::OpenDirectoryDialog per inoltrare la richiesta 
+    /// - SettingsEvent::OpenDirectoryDialog, ritorna MainMenuEvent::OpenDirectoryDialog per inoltrare la richiesta
     /// a GlobalGuiState
     /// - SettingsEvent::Nil, non fa nulla.
     ///
@@ -190,7 +182,7 @@ impl MainMenu {
                     self.switch_to_main_window();
                 }
                 SettingsEvent::Nil => (),
-                SettingsEvent::OpenDirectoryDialog => return MainMenuEvent::OpenDirectoryDialog
+                SettingsEvent::OpenDirectoryDialog => return MainMenuEvent::OpenDirectoryDialog,
             }
         } else {
             unreachable!();
@@ -199,33 +191,32 @@ impl MainMenu {
         MainMenuEvent::Nil
     }
 
-    /// Gestisce l'attesa (busy wait) che il thread che gestisce il directory dialog invii 
+    /// Gestisce l'attesa (busy wait) che il thread che gestisce il directory dialog invii
     /// sul canale (try_recv()).
     /// - Se il canale è stato chiuso inaspettatamente, segnala l'errore ed elimina il receiver;
     /// - Altrimenti, elimina il receiver dopo aver salvato l'eventuale path ritornato.
-    pub fn wait_directory_dialog(&mut self, directory_dialog_receiver: &mut Option<Receiver<Option<PathBuf>>>)
-    {
-        if let Some(rx) = directory_dialog_receiver
-        {
-            match rx.try_recv() 
-            {
+    pub fn wait_directory_dialog(
+        &mut self,
+        directory_dialog_receiver: &mut Option<Receiver<Option<PathBuf>>>,
+    ) {
+        if let Some(rx) = directory_dialog_receiver {
+            match rx.try_recv() {
                 //L'utente ha chiuso il file dialog (premendo su save o su cancel):
-                Ok(opt) => 
-                {
+                Ok(opt) => {
                     if let Some(p) = opt {
-                        if let MainMenuState::SaveSettings(ss) = &mut self.state 
-                        {
+                        if let MainMenuState::SaveSettings(ss) = &mut self.state {
                             ss.set_default_directory(p.to_str().unwrap().to_string());
                         }
                     }
                     let _ = directory_dialog_receiver.take();
-                },
+                }
                 //L'utente non ha ancora chiuso il file dialog:
                 Err(TryRecvError::Empty) => (),
                 //Si è verificato un errore e il canale di comunicazione si è chiuso:
-                Err(TryRecvError::Disconnected) =>
-                {
-                    self.alert.borrow_mut().replace("Error. Changes not applyed.".to_string());
+                Err(TryRecvError::Disconnected) => {
+                    self.alert
+                        .borrow_mut()
+                        .replace("Error. Changes not applied.".to_string());
                     let _ = directory_dialog_receiver.take();
                 }
             }
@@ -273,7 +264,7 @@ impl MainMenu {
                     self.alert
                         .borrow_mut()
                         .replace("Loading failed".to_string());
-                        self.switch_to_main_window();
+                    self.switch_to_main_window();
                 }
                 Err(TryRecvError::Empty) => loading::show_loading(ctx),
             }
@@ -284,8 +275,8 @@ impl MainMenu {
     }
 
     /// Siccome verrà visualizzata la schermata di impostazione delle hotkeys, disattiva temporaneamente l'ascolto delle hotkeys già registrate.
-    /// Questo è necessario perchè, ad ogni refresh della gui, l'ascolto delle hotkeys è abilitato di default. Non si vuole tenerlo
-    /// abilitato quando viene mostrata la schermata HotkeysSettings perchè potrebbe interferire con le operazioni di registrazione
+    /// Questo è necessario perché, ad ogni refresh della gui, l'ascolto delle hotkeys è abilitato di default. Non si vuole tenerlo
+    /// abilitato quando viene mostrata la schermata HotkeysSettings perché potrebbe interferire con le operazioni di registrazione
     /// di nuove hotkeys. <br>
     /// Successivamente, esegue il metodo <i>HotkeysSettings::update()</i> e ne gestisce il valore di ritorno:
     /// - esce dalla schermata di impostazioni (cambiando lo stato in <i>MainMenuState::CaptureMode</i>) nel caso siano stati premuti i bottoni
@@ -302,7 +293,9 @@ impl MainMenu {
                     self.switch_to_main_window();
                 }
                 SettingsEvent::Nil => (),
-                SettingsEvent::OpenDirectoryDialog => {unreachable!("Impossible to open directory dialog from hotkey settings");}
+                SettingsEvent::OpenDirectoryDialog => {
+                    unreachable!("Impossible to open directory dialog from hotkey settings");
+                }
             }
         } else {
             unreachable!();

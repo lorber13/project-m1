@@ -1,12 +1,12 @@
 /*
-La gui, a causa delle limitazioni imposte da eframe, deve essere eseguta solo nel thread pricipale.
+La gui, a causa delle limitazioni imposte da eframe, deve essere eseguita solo nel thread principale.
 Questo modulo è disegnato per permettere al thread che esegue la gui di non iniziare mai attese bloccanti.
 
 La gui è quindi basata su una macchina a stati e le varianti della EnumGuiState incapsulano le variabili
 con i dettagli di ciascuno stato.
 In particolare, se una variante incapsula un Receiver, allora essa rappresenta uno stato di attesa
 della gui, che fa busy waiting con try_recv(). Si noti che il design della sincronizzazione con altri
-thread, appena descritto, non aggiunge overhead perchè asseconda il funzionamento dell'event loop della gui, che continua a ridisegnarsi.
+thread, appena descritto, non aggiunge overhead perché asseconda il funzionamento dell'event loop della gui, che continua a ridisegnarsi.
 
 Lo stato della gui è memorizzato dentro la struct GlobalGuiState assieme ad altre informazioni globali.
  */
@@ -120,7 +120,7 @@ impl GlobalGuiState {
         }
     }
 
-    /// Modifica lo stato della macchina a stati in <i>EnumGuistate::MainMenu</i>, in cui memorizza una nuova istanza di MainMenu.
+    /// Modifica lo stato della macchina a stati in <i>EnumGuiState::MainMenu</i>, in cui memorizza una nuova istanza di MainMenu.
     fn switch_to_main_menu(&mut self, frame: &mut eframe::Frame) {
         frame.set_decorations(true);
         frame.set_fullscreen(false);
@@ -170,7 +170,7 @@ impl GlobalGuiState {
         self.directory_dialog_receiver = Some(rx);
     }
 
-    ///A secoda dello stato attuale della gui, gestisce diversamente l'attesa che il thread
+    ///A seconda dello stato attuale della gui, gestisce diversamente l'attesa che il thread
     /// che gestisce il directory dialog invii un risultato sul canale.
     ///
     ///<h3>Panics:</h3>
@@ -178,7 +178,9 @@ impl GlobalGuiState {
     fn wait_directory_dialog(&mut self) {
         if let EnumGuiState::MainMenu(m) = &mut self.state {
             m.wait_directory_dialog(&mut self.directory_dialog_receiver);
-        }else {unreachable!();}
+        } else {
+            unreachable!();
+        }
     }
 
     /// Data una richiesta di screenshot, rende invisibile l'applicazione e
@@ -215,7 +217,8 @@ impl GlobalGuiState {
     }
 
     /// Se nello stato corrente è memorizzato un JoinHandle, esegue <i>join()</i>, mettendo di fatto in attesa la gui (che intanto non è visibile)
-    /// fino a quando lo sleep eseguito dal thread non è terminato. Dopo il <i>join()</i>, rende dinuovo visibile l'applicazione.
+    /// fino a quando lo sleep eseguito dal thread non è terminato.
+    /// Dopo il <i>join()</i>, rende di nuovo visibile l'applicazione.
     ///
     /// Dopo ciò, richiama un metodo diverso a seconda del tipo di screenshot richiesto.
     ///
@@ -285,7 +288,7 @@ impl GlobalGuiState {
                         Err(error_message) => {
                             self.alert
                                 .borrow_mut()
-                                .replace("An error occoured. Impossible to continue.".to_string());
+                                .replace("An error occurred. Impossible to continue.".to_string());
                             let _ = writeln!(std::io::stderr(), "Error: {}", error_message);
                         }
                     }
@@ -294,7 +297,7 @@ impl GlobalGuiState {
                 Err(TryRecvError::Disconnected) => {
                     frame.set_visible(true);
                     self.alert.borrow_mut().replace(
-                        "An error occoured when trying to start the service. Please retry."
+                        "An error occurred when trying to start the service. Please retry."
                             .to_string(),
                     );
                     self.switch_to_main_menu(frame);
@@ -358,7 +361,7 @@ impl GlobalGuiState {
     /// - Se la <i>recv()</i> ha successo:
     ///     1. avvia il thread per copiare nella clipboard l'immagine ricevuta tramite il canale;
     ///     2. richiama EditImage::new(), a cui passa l'immagine ricevuta tramite il canale;
-    ///     3. cambia lo stato corrente in <i>EnumGuistate::EditImage</i>, in cui memorizza a nuova istanza di <i>EditImage</i>.
+    ///     3. cambia lo stato corrente in <i>EnumGuiState::EditImage</i>, in cui memorizza a nuova istanza di <i>EditImage</i>.
     /// - Se il canale è vuoto, mostra uno spinner;
     /// - Se il canale è stato chiuso inaspettatamente, scrive un messaggio di errore nello stato di errore globale.
     ///
@@ -424,7 +427,7 @@ impl GlobalGuiState {
     ///1. Lancia un thread che, consultando le <i>save_settings</i> dell'applicazione ed eventualmente
     /// mostrando un file dialog, ottiene il path del file di salvataggio dell'immagine;
     /// 2. salva in <i>GlobalGuiState</i>il <i>Receiver</i> del canale di comunicazione con il thread lanciato
-    /// precedentemente. La presenza di tale <i>Receiver</i> nello stato globale causerà la disabillitazione
+    /// precedentemente. La presenza di tale <i>Receiver</i> nello stato globale causerà la disabilitazione
     /// dell'altra finestra attualmente mostrata.
     fn manage_save_request(&mut self, image: RgbaImage, format: ImageFormat) {
         let rx = self.save_settings.borrow().compose_output_file_path(format);
@@ -556,7 +559,7 @@ pub fn launch_gui() {
 
 impl eframe::App for GlobalGuiState {
     /// Attiva di default l'ascolto della pressione delle hotkeys: potrà essere eventualmente disattivato dai metodi che verranno
-    /// richiamati successivamente da questo metodo. Si è scelto questo approccio perchè sono poche le casistiche in cui l'ascolto
+    /// richiamati successivamente da questo metodo. Si è scelto questo approccio perché sono poche le casistiche in cui l'ascolto
     /// debba essere disattivato.<br>
     /// Controlla se ci sono eventuali thread worker che stanno facendo operazioni sulla clipboard da gestire.<br>
     /// A seconda dello stato corrente (una delle varianti di <i>EnumGlobalGuiState</i>) esegue una diversa operazione (eseguendo un match case).<br>
@@ -616,7 +619,7 @@ impl eframe::App for GlobalGuiState {
             }
         }
 
-        //ascolto di hotkeys solo nel caso non sia in corso il display di un messagio di errore
+        //ascolto di hotkeys solo nel caso non sia in corso il display di un messaggio di errore
         if main_window_enabled {
             if let Some(hr) = &self.hotkey_receiver {
                 match hr.try_recv() {
@@ -625,7 +628,7 @@ impl eframe::App for GlobalGuiState {
                     Err(TryRecvError::Disconnected) => {
                         self.alert
                             .borrow_mut()
-                            .replace("Error in hotkeys. Temporarly unavailable".to_string());
+                            .replace("Error in hotkeys. Temporarily unavailable".to_string());
                         self.hotkey_receiver = None;
                     }
                 }

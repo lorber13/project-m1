@@ -55,7 +55,7 @@ impl From<usize> for HotkeyName {
     }
 }
 
-/// Struttura dati che si occupa di gestire le hotkeys regsistrate al livello dell'intera applicazione.<br>
+/// Struttura dati che si occupa di gestire le hotkeys registrate al livello dell'intera applicazione.<br>
 /// Memorizza al suo interno:
 /// - copia di backup: campo privato, modificabile solo con la chiamata al metodo <i>update_changes()</i>;
 /// - <i>vec</i>: campo pubblico.<br>
@@ -63,7 +63,7 @@ impl From<usize> for HotkeyName {
 /// Questa ridondanza ha l'obiettivo di mantenere stabili le impostazioni originali fino a quando le modifiche non
 /// vengono confermate. Infatti, solo <i>vec</i> viene modificato tramite le chiamate a <i>request_register()</i> e
 /// <i>request_unregister()</i>.<br>
-/// Prima dell'utilizzo di <i>vec</i> per introdurre nuove modifiche deve essere eseguito il metodo <i>prepare_for_updates()</i>, 
+/// Prima dell'utilizzo di <i>vec</i> per introdurre nuove modifiche deve essere eseguito il metodo <i>prepare_for_updates()</i>,
 /// che controlla la coerenza tra <i>backup</i> e <i>vec</i>.<br>
 ///
 /// Esiste la possibilità di disabilitare l'ascolto delle hotkeys, tramite il campo <i>listen_enabled</i> e il relativo metodo
@@ -89,7 +89,7 @@ pub struct RegisteredHotkeys {
 }
 
 impl RegisteredHotkeys {
-    /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti. 
+    /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti.
     ///Imposta <i>listen_enabled</i> a true di default.
     ///Ritorna la struttura già incapsulata in un <i>Arc</i>.
     pub fn new() -> Arc<Self> {
@@ -108,8 +108,8 @@ impl RegisteredHotkeys {
         Arc::new(ret)
     }
 
-    ///Copia il contenuto di <i>self::vec</i> dentro a <i>self::backup</i>, 
-    ///andando a richiamare <i>self:: registrer()/unregister()<i> in base alle differenze tra le celle 
+    ///Copia il contenuto di <i>self::vec</i> dentro a <i>self::backup</i>,
+    ///andando a richiamare <i>self:: register()/unregister()<i> in base alle differenze tra le celle
     ///dei due vettori associate alla stessa <i>HotkeyName</i>.
     ///In particolare, se per una determinata <i>HotkeyName</i> era già stata memorizzata una combinazione di
     ///tasti (CT), si ha l'accortezza di richiamare i metodi per la registrazione solo se effettivamente la CT è
@@ -200,7 +200,7 @@ impl RegisteredHotkeys {
         rx
     }
 
-    ///Esegue un ciclo su tutte le hotkeys memorizzate nella bozza (<i>self::vec</i>) 
+    ///Esegue un ciclo su tutte le hotkeys memorizzate nella bozza (<i>self::vec</i>)
     /// e le confronta con quella passata come parametro.
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
@@ -257,12 +257,12 @@ impl RegisteredHotkeys {
     ///Esegue la registrazione della hotkey presso il <i>GlobalHotkeyManager</i>.
     ///Se la registrazione ha avuto successo, aggiorna in <i>self::backup<i> l'informazione relativa alla
     /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore.
-    /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
+    /// NON è possibile fare eseguire da un thread separato perché la libreria GlobalHotkey non funziona
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
             //if crate::DEBUG {println!("\nDEBUG: Hotkey not registered yet");}
 
-            match self.ghm.register(h) {
+            return match self.ghm.register(h) {
                 Ok(()) => {
                     if DEBUG {
                         println!(
@@ -281,16 +281,14 @@ impl RegisteredHotkeys {
                     if DEBUG {
                         println!("DEBUG: backup modified");
                     }
-                    return Ok(());
+                    Ok(())
                 }
-                Err(e) => {
-                    return Err(format!(
-                        "Unable to register the hotkey related to command {}.\nError: {}",
-                        <HotkeyName as Into<String>>::into(name),
-                        e
-                    ))
-                }
-            }
+                Err(e) => Err(format!(
+                    "Unable to register the hotkey related to command {}.\nError: {}",
+                    <HotkeyName as Into<String>>::into(name),
+                    e
+                )),
+            };
         }
 
         Err(format!(
@@ -301,7 +299,7 @@ impl RegisteredHotkeys {
 
     ///Cancella l'associazione tra la hotkey <i>name</i> e la combinazione di tasti memorizzata nella corrispondente entry di <i>self::vec</i>.
     ///
-    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo modificando la copia temporanea <i>self::vec</i>. 
+    ///<b>ATTENZIONE:</b> con questo metodo, si sta solo modificando la copia temporanea <i>self::vec</i>.
     ///Le modifiche possono essere rese definitive richiamando <i>self::update_changes()</i>.
 
     pub fn request_unregister(self: &Arc<Self>, name: HotkeyName) {
@@ -318,7 +316,7 @@ impl RegisteredHotkeys {
     ///Se trova una combinazione valida, chiede l'annullamento della registrazione presso il <i>GlobalHotkeyManager</i>
     ///e ritorna l'esito di tale operazione.
     ///
-    /// NON è possibile fare eseguire da un thread separato perchè la libreria GlobalHotkey non funziona
+    /// NON è possibile fare eseguire da un thread separato perché la libreria GlobalHotkey non funziona
     fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), String> {
         let temp = self
             .backup
@@ -358,12 +356,12 @@ impl RegisteredHotkeys {
 
 /// Funzione che lancia un thread worker che rimane (con chiamata bloccante recv()) in ascolto di eventi di pressione di
 /// hotkeys. Riceve come parametro il <i>Context</i> della gui per poter svegliare la gui, in qualsiasi stato essa sia,
-/// dopo il verificarsi di un evento. In particolare, questo è utile nel momento in cui l'applicazione ha smesso 
-/// di eseguire il metodo <i>App::update()</i> (vedi impl <i>GlobalGuiState</i>) perchè la finestra non è al momento visibile.
-/// 
+/// dopo il verificarsi di un evento. In particolare, questo è utile nel momento in cui l'applicazione ha smesso
+/// di eseguire il metodo <i>App::update()</i> (vedi impl <i>GlobalGuiState</i>) perché la finestra non è al momento visibile.
+///
 /// Quando la chiamata a <i>GlobalHotkeyEvent::receiver.recv()</i> ritorna un evento <i>GlobalHotkeyEvent<i>, esso viene
-/// convertito in <i>HotkeyName<i> utilizzando la struttura <i>RegisterdHotkeys</i> e inviato sul canale con il thread gui. 
-/// Dopodichè, si assicura che la gui possa leggere dal canale, svegliandola con il metodo <i>Context::request_repaint()</i>. 
+/// convertito in <i>HotkeyName<i> utilizzando la struttura <i>RegisteredHotkeys</i> e inviato sul canale con il thread gui.
+/// Successivamente, si assicura che la gui possa leggere dal canale, svegliandola con il metodo <i>Context::request_repaint()</i>.
 pub fn start_thread_listen_hotkeys(
     arc_ctx: Arc<Context>,
     arc_registered_hotkeys: Arc<RegisteredHotkeys>,

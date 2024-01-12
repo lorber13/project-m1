@@ -43,8 +43,8 @@ pub struct HotkeysSettings
 impl HotkeysSettings
 {
     /// Parametri:
-    /// -   <b>alert</b>: smartpointer allo stato di errore globale di tutta l'applicazione;<br>
-    /// -   <b>registered_hotkeys</b>: smartpointer contenente la struct RegisteredHotkeys che potrà
+    /// -   <b>alert</b>: smart pointer allo stato di errore globale di tutta l'applicazione;<br>
+    /// -   <b>registered_hotkeys</b>: smart pointer contenente la struct RegisteredHotkeys che potrà
     ///     essere modificata da questo modulo. In particolare, il modulo richiederà degli updates
     ///     a RegisteredHotkeys, la quale li memorizzerà internamente, ma non li applicherà
     ///     fino a quando non viene chiamato il metodo <i>RegisteredHotkeys::update_changes(&self)</i>.
@@ -144,7 +144,7 @@ impl HotkeysSettings
                             ui.horizontal(|ui|
                             {
                                 ui.heading("?");
-                                ui.code("HELP: press at least one modifier and an alphabetic key.\nThe letter must be the last button to be pressed.\nWhen you press the letter, also the modifiers have to be pressed simoultaneously.\nIf it doesn't work, make the pressure last longer.");
+                                ui.code("HELP: press at least one modifier and an alphabetic key.\nThe letter must be the last button to be pressed.\nWhen you press the letter, also the modifiers have to be pressed simultaneously.\nIf it doesn't work, make the pressure last longer.");
                             })
                         });
                     }
@@ -157,7 +157,7 @@ impl HotkeysSettings
     /// Mostra una riga con etichetta (della hotkey), stringa che rappresenta la combinazione di tasti, bottoni per 
     /// avviare la registrazione o per eliminare la hotkey.<br>
     /// Parametri:
-    /// - <b>hn<b>, identificaivo della hotkey;
+    /// - <b>hn<b>, identificativo della hotkey;
     /// - <b>value</b>, combinazione di tasti associata;
     /// Se è in corso la registrazione di un'altra hotkey, i bottoni di questa riga vengono disabilitati.
     fn row_gui(&mut self, ui: &mut Ui, hn: HotkeyName, value: String)
