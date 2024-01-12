@@ -61,7 +61,6 @@ pub fn scaled_point(top_left: Pos2, scale_ratio: f32, point: Pos2) -> Pos2 {
 /// dato un segmento definito come due punti nello spazio + uno spessore, la funzione ritorna i 4 punti di un
 /// rettangolo che rappresenta lo stesso segmento.
 pub fn line_width_to_polygon(points: &[Pos2; 2], width: f32) -> [Point<i32>; 4] {
-    // todo: can I obtain this without using sqrt?
     let x1 = points[0].x;
     let x2 = points[1].x;
     let y1 = points[0].y;

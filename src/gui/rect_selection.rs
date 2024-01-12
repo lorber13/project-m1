@@ -101,8 +101,10 @@ impl RectSelection {
                                         })
                                         .expect("error"),
                                 ]),
-                                self.rgba.clone(),
-                            ), // todo: ugly clone
+                                self.rgba.clone(), /* I am obliged
+                                to clone the attribute because it is needed for the next frame
+                                (it is not obvious that the next frame the status of the app is immediately changed */
+                            ),
                         );
                     }
                 } else {

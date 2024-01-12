@@ -296,16 +296,13 @@ impl EditImage {
         match &mut self.current_tool {
             Tool::Pen { line } => {
                 if response.drag_started() {
-                    line.push(
-                        response
-                            .hover_pos()
-                            .expect("should not panic because the pointer should be on the widget"),
-                    );
+                    if let Some(hover_pos) = response.hover_pos() {
+                        line.push(hover_pos);
+                    }
                 } else if response.dragged() {
-                    line.push(
-                        ctx.pointer_hover_pos()
-                            .expect("should not panic because while dragging the pointer exists"),
-                    );
+                    if let Some(hover_pos) = ctx.pointer_hover_pos() {
+                        line.push(hover_pos);
+                    }
                 } else if response.drag_released() {
                     // no need to push current hover pos, since this frame drag is released
                     self.annotations.push(Shape::line(
@@ -422,13 +419,15 @@ impl EditImage {
                     ModificationOfRectangle::Resize { direction } => {
                         set_cursor(direction, ctx);
                         if response.dragged() {
-                            self.cut_rect = resize_rectangle(
-                                self.cut_rect,
-                                ctx.pointer_hover_pos().expect("should be defined"),
-                                self.scale_ratio,
-                                painter_rect.left_top(),
-                                direction,
-                            );
+                            if let Some(hover_pos) = ctx.pointer_hover_pos() {
+                                self.cut_rect = resize_rectangle(
+                                    self.cut_rect,
+                                    hover_pos,
+                                    self.scale_ratio,
+                                    painter_rect.left_top(),
+                                    direction,
+                                );
+                            }
                         } else if response.drag_released() {
                             make_rect_legal(&mut self.cut_rect);
                             self.cut_rect = self.cut_rect.intersect(Rect::from_min_size(
