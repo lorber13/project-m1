@@ -192,16 +192,18 @@ impl ScreensManager {
         }
     }
 
-    pub fn try_get_screens(
-        self: &Arc<Self>,
-    ) -> Option<RwLockReadGuard<Vec<(Screen, Mutex<Option<RgbaImage>>)>>> {
+    pub fn try_get_screens<'a>(
+        self: &'a Arc<Self>,
+    ) -> Option<RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>>> {
         match self.screens.try_read() {
             Ok(g) => Some(g),
             Err(..) => None,
         }
     }
 
-    fn get_screens(self: &Arc<Self>) -> RwLockReadGuard<Vec<(Screen, Mutex<Option<RgbaImage>>)>> {
+    fn get_screens<'a>(
+        self: &'a Arc<Self>,
+    ) -> RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>> {
         self.screens.read().unwrap()
     }
 }
