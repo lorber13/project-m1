@@ -13,6 +13,8 @@ use crate::DEBUG;
 pub const N_HOTK: usize = 2;
 
 /// Può esserci una sola combinazione di tasti associata ad ogni variante di questa enum. Infatti, ad ogni variante di HotkeyName è associato un comando che può essere dato in input al programma.
+///
+/// <b>Attenzione:</b> se si dovessero aggiungere varianti a questa enum, è necessario aggiornare la costante <i>N_HOTK</i>.
 #[derive(Clone, Copy)]
 pub enum HotkeyName {
     FullscreenScreenshot,
@@ -58,13 +60,13 @@ impl From<usize> for HotkeyName {
 /// Struttura dati che si occupa di gestire le hotkeys registrate al livello dell'intera applicazione.<br>
 /// Memorizza al suo interno:
 /// - copia di backup: campo privato, modificabile solo con la chiamata al metodo <i>update_changes()</i>;
-/// - <i>vec</i>: campo pubblico.<br>
+/// - <i>vec</i>: copia "di brutta" del precedente campo. Usata per salvare le modifiche temporanee prima del loro effettivo salvataggio.<br>
 ///
 /// Questa ridondanza ha l'obiettivo di mantenere stabili le impostazioni originali fino a quando le modifiche non
 /// vengono confermate. Infatti, solo <i>vec</i> viene modificato tramite le chiamate a <i>request_register()</i> e
 /// <i>request_unregister()</i>.<br>
 /// Prima dell'utilizzo di <i>vec</i> per introdurre nuove modifiche deve essere eseguito il metodo <i>prepare_for_updates()</i>,
-/// che controlla la coerenza tra <i>backup</i> e <i>vec</i>.<br>
+/// che copia il contenuto di <i>backup</i> in <i>vec</i>.<br>
 ///
 /// Esiste la possibilità di disabilitare l'ascolto delle hotkeys, tramite il campo <i>listen_enabled</i> e il relativo metodo
 /// setter.
@@ -78,7 +80,7 @@ impl From<usize> for HotkeyName {
 pub struct RegisteredHotkeys {
     ///Memorizzazione stabile delle hotkey registrate. Questo Vec viene modificato solo quando una modifica viene salvata.
     ///Si fa riferimento al contenuto di questo <i>Vec</i> per sapere quali comandi devono essere eseguiti in seguito alla
-    ///digitazione delle hotkeys.
+    ///pressione delle hotkeys durante il funzionamento normale del programma.
     backup: Vec<RwLock<Option<(HotKey, String)>>>,
     ///Copia di "brutta" del vettore di Hotkeys, modificato direttamente durante il settaggio delle impostazioni.
     vec: Vec<RwLock<Option<String>>>,
@@ -119,10 +121,6 @@ impl RegisteredHotkeys {
     pub fn update_changes(self: &Arc<Self>) -> Result<(), String> {
         let mut ret = Ok(());
         for i in 0..N_HOTK {
-            if DEBUG {
-                println!("DEBUG: comparing hotkeys {}", i);
-            }
-
             let temp1;
             let temp2;
             {
