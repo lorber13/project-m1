@@ -27,7 +27,7 @@ use crate::gui::loading::show_loading;
 use crate::hotkeys::{self, HotkeyName, RegisteredHotkeys};
 use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
-use crate::{image_coding, screens_manager, DEBUG};
+use crate::{image_coding, screens_manager};
 use edit_image::EditImage;
 use eframe::egui::Rect;
 use image::{ImageError, RgbaImage};
@@ -256,9 +256,6 @@ impl GlobalGuiState {
     /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread nello stato corrente.
     ///
     fn switch_to_rect_selection(&mut self, ctx: &eframe::egui::Context) {
-        if DEBUG {
-            println!("nframe (switch to rect selection): {}", ctx.frame_nr());
-        }
         self.state = EnumGuiState::LoadingRectSelection(
             self.screens_manager.start_thread_fullscreen_screenshot(),
         );
@@ -511,9 +508,6 @@ impl GlobalGuiState {
         ctx: &eframe::egui::Context,
         frame: &mut eframe::Frame,
     ) {
-        if DEBUG {
-            println!("hotkey_reaction");
-        }
         frame.focus();
         match hn {
             HotkeyName::FullscreenScreenshot => self.switch_to_edit_image(None, ctx, frame),
@@ -570,7 +564,8 @@ impl eframe::App for GlobalGuiState {
     /// in caso positivo, la gestisce.
     /// Se invece lo stato di errore globale non è vuoto, mostra un alert con il messaggio che descrive tale errore.
     /// Se invece è aperto un file dialog, mostra la schermata corrente disabilitata.
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+
 
         let main_window_enabled = self.alert.borrow().is_none()
             && self.pending_save_request.is_none()

@@ -9,7 +9,6 @@ use std::rc::Rc;
 use std::cell::Cell;
 use crate::image_coding::ImageFormat;
 use std::path::PathBuf;
-use crate::DEBUG;
 use std::io::Write;
 use std::sync::mpsc::{channel, Receiver};
 
@@ -119,14 +118,6 @@ impl SaveSettings
                 (None, Some(dn)) => {
                     let dir_opt = file_dialog::show_directory_dialog(None);
                     if let Some(mut pb) = dir_opt {
-                        if DEBUG {
-                            let _ = writeln!(
-                                std::io::stdout(),
-                                "DEBUG: dir picker return = {}",
-                                pb.display()
-                            );
-                        }
-    
                         let ext: &str = format.into();
                         pb.set_file_name(dn);
                         pb.set_extension(ext);
@@ -251,7 +242,6 @@ impl SaveSettings
                     if ui.button("Save").clicked() {
                         if self.default_dir.enabled && ( self.default_dir.path.is_empty() || !std::path::Path::new(&self.default_dir.path).exists())
                         {
-                            if DEBUG {println!("Found an invalid dir path");}
                             self.alert.borrow_mut().replace("Invalid default directory path.".to_string());
                         }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.is_empty()
                         {
@@ -327,7 +317,6 @@ impl SaveSettings
     pub fn set_default_directory(&mut self, dir: String)
     {
         if self.default_dir.enabled {
-            if DEBUG { println!("\nsetting default dir: {}", dir); }
             self.default_dir.path = dir;
         }   
     }

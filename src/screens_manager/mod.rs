@@ -134,10 +134,6 @@ impl ScreensManager {
     ///allo schermo attualmente selezionato e richiamare <i>capture()</i> su essa.
     ///L'acquisizione del lock implica che il metodo corrente si blocchi se è contemporaneamente eseguito l'aggiornamento di tale lista.
     fn fullscreen_screenshot(self: &Arc<Self>) -> Result<RgbaImage, &'static str> {
-        if crate::DEBUG {
-            println!("DEBUG: performing fullscreen screenshot");
-        }
-
         match self
             .get_screens()
             .get(*self.curr_screen_index.read().unwrap())

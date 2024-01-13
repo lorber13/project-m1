@@ -149,9 +149,6 @@ impl MainMenu {
     /// clonando quella attuale dell'applicazione, così che il modulo save_settings modifichi soltanto una copia
     /// delle attuali impostazioni: non quelle originali.
     fn switch_to_save_settings(&mut self) {
-        if crate::DEBUG {
-            print!("DEBUG: switch to save settings");
-        }
         match self.state {
             MainMenuState::SaveSettings(..) => (), //non c'è nulla di nuovo da visualizzare
             _ => {
@@ -228,9 +225,6 @@ impl MainMenu {
     /// Altrimenti, richiama il metodo <i>HotkeySettings::prepare_for_updates()</i> e modifica lo stato corrente in LoadingHotkeySettings, memorizzando al suo interno
     /// il Receiver ritornato da <i>HotkeySettings::prepare_for_updates()</i>.
     fn switch_to_hotkeys_settings(&mut self) {
-        if crate::DEBUG {
-            print!("DEBUG: switch to hotkeys settings");
-        }
         match self.state {
             MainMenuState::HotkeysSettings(..) | MainMenuState::LoadingHotkeysSettings(..) => (), //non c'è nulla di nuovo da visualizzare
             _ => {

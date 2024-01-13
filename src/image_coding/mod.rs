@@ -11,7 +11,6 @@ use std::{
     sync::mpsc::{channel, Receiver},
 };
 
-use crate::DEBUG;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

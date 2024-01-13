@@ -6,7 +6,6 @@ use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
-use crate::DEBUG;
 
 ///Il numero di varianti della enum HotkeyName. Il modulo Hotkeys è predisposto per scalare ad un maggiore
 ///numero di hotkeys.
@@ -139,10 +138,6 @@ impl RegisteredHotkeys {
             }
 
             ret.as_ref()?; //ritorna nel caso ret.is_err() == true
-
-            if DEBUG {
-                println!("DEBUG: hotkeys {} done", i);
-            }
         }
 
         ret

@@ -10,7 +10,6 @@ pub fn show_error_alert(ctx: &Context, show: &mut Option<String>) {
         Window::new("Alert")
             .default_pos(Pos2::new(100.0, 100.0))
             .show(ctx, |ui| {
-                //if DEBUG {println!("DEBUG: alert = {}", msg);}
                 ui.heading(msg.clone());
 
                 ui.add_space(10.0);
