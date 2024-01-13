@@ -503,6 +503,8 @@ impl GlobalGuiState {
     }
 
     /// Esegue l'azione relativa alla hotkey <b>hn</b>.
+    /// Se la hotkey è stata premuta mentre la finestra dell'applicazione non era in primo piano, la mette in primo
+    /// piano con la chiamata a <i>frame.focus()</i>.
     fn hotkey_reaction(
         &mut self,
         hn: HotkeyName,
@@ -564,17 +566,20 @@ impl eframe::App for GlobalGuiState {
     /// debba essere disattivato.<br>
     /// Controlla se ci sono eventuali thread worker che stanno facendo operazioni sulla clipboard da gestire.<br>
     /// A seconda dello stato corrente (una delle varianti di <i>EnumGlobalGuiState</i>) esegue una diversa operazione (eseguendo un match case).<br>
-    /// Solo se attualmente non è mostrato nessun alert, controlla se nell'input di questo frame c'è la pressione di una hotkey:
+    /// Solo se attualmente non è mostrato nessun alert e nessun file dialog, controlla se nell'input di questo frame c'è la pressione di una hotkey:
     /// in caso positivo, la gestisce.
     /// Se invece lo stato di errore globale non è vuoto, mostra un alert con il messaggio che descrive tale errore.
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        //if crate::DEBUG {print!("gui refresh. ");}
+    /// Se invece è aperto un file dialog, mostra la schermata corrente disabilitata.
+    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
 
         let main_window_enabled = self.alert.borrow().is_none()
             && self.pending_save_request.is_none()
             && self.directory_dialog_receiver.is_none();
 
-        //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys
+        //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys.
+        //È necessario mettere questa istruzione all'interno di GlobalGuiState::update() per poter avere 
+        // ctx da passare come parametro; ed inoltre per tutela contro eventuali arresti del thread: esso viene rilanciato
+        //così in automatico.
         if self.hotkey_receiver.is_none() {
             let (tx, rx) = channel();
             self.hotkey_receiver = Some(rx);
@@ -589,12 +594,6 @@ impl eframe::App for GlobalGuiState {
 
         //gestione di eventuali operazioni sulla clipboard
         self.manage_clipboard();
-
-        /*
-        if crate::DEBUG {
-            println!("state = {:?}", self.state);
-        }
-        */
 
         match &mut self.state {
             EnumGuiState::MainMenu(..) => {
@@ -620,7 +619,7 @@ impl eframe::App for GlobalGuiState {
             }
         }
 
-        //ascolto di hotkeys solo nel caso non sia in corso il display di un messaggio di errore
+        //ascolto di hotkeys solo nel caso non sia in corso il display di un'altra finestra sovrapposta bloccante
         if main_window_enabled {
             if let Some(hr) = &self.hotkey_receiver {
                 match hr.try_recv() {
@@ -648,7 +647,5 @@ impl eframe::App for GlobalGuiState {
                 ctx.request_repaint();
             }
         }
-
-        //ctx.request_repaint();
     }
 }
