@@ -77,7 +77,7 @@ fn copy_to_clipboard(img: &RgbaImage) -> Result<(), arboard::Error> {
 ///Crea un canale e muove il suo  <i>Sender</i> ad un nuovo thread, il quale si occupa di eseguire <i>crop_image()</i>
 ///ed inviare il risultato sul canale.
 ///Ritorna <i>Receiver<Result<...>></i>, nonostante nell'elaborazione non possano verificarsi errori, per maggiore comprensibilità nell'uso del metodo
-///e per una maggiore uniformità per rendere il codice più mantenibile.
+///e per una maggiore uniformità che rende il codice più mantenibile.
 pub fn start_thread_crop_image(
     rect: Rect,
     img: RgbaImage,
@@ -103,8 +103,6 @@ fn crop_image(rect: Rect, img: RgbaImage) -> RgbaImage {
 
 ///Crea un canale e muove il suo  <i>Sender</i> ad un nuovo thread, il quale si occupa di eseguire <i>save_image()</i>
 ///ed inviare il risultato sul canale.
-///Prima di avviare il salvataggio, il thread costruisce il Path completo del file di output, gestendo la presenza
-///o meno del nome del file nel parametro <i>dir_path</i>
 pub fn start_thread_save_image(
     path: std::path::PathBuf,
     img: RgbaImage,
@@ -112,13 +110,6 @@ pub fn start_thread_save_image(
     let (tx, rx) = channel();
     let path_str = path.as_os_str().to_str().unwrap().to_string();
     std::thread::spawn(move || {
-        if DEBUG {
-            let _ = writeln!(
-                stdout(),
-                "DEBUG: saving new image: {}",
-                path.display()
-            );
-        }
 
         let _ = tx.send(save_image(path, img)
                         .map_or_else(|res| Err(res), |()| Ok(path_str)));
