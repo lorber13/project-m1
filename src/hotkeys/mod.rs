@@ -203,9 +203,6 @@ impl RegisteredHotkeys {
     fn check_if_already_registered(self: &Arc<Self>, hotkey: &String) -> bool {
         for opt in self.vec.iter() {
             if let Some(s) = &*opt.read().unwrap() {
-                if DEBUG {
-                    println!("\nDEBUG: comparing strings {} and {}", s, hotkey);
-                }
                 if s == hotkey {
                     return true;
                 }
@@ -254,31 +251,19 @@ impl RegisteredHotkeys {
 
     ///Esegue la registrazione della hotkey presso il <i>GlobalHotkeyManager</i>.
     ///Se la registrazione ha avuto successo, aggiorna in <i>self::backup<i> l'informazione relativa alla
-    /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore.
-    /// NON è possibile fare eseguire da un thread separato perché la libreria GlobalHotkey non funziona
+    /// <i>HotkeyName</i> passata come parametro. Altrimenti, ritorna una stringa di errore. <br/>
+    /// NON è possibile fare eseguire da un thread separato perché non compatibile con i requisiti del crate GlobalHotkey.
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
-            //if crate::DEBUG {println!("\nDEBUG: Hotkey not registered yet");}
 
             return match self.ghm.register(h) {
                 Ok(()) => {
-                    if DEBUG {
-                        println!(
-                            "DEBUG: hotkey registered.\n The lock is {:?}",
-                            self.backup
-                                .get(<HotkeyName as Into<usize>>::into(name))
-                                .unwrap()
-                        );
-                    }
                     self.backup
                         .get(<HotkeyName as Into<usize>>::into(name))
                         .unwrap()
                         .write()
                         .unwrap()
                         .replace((h, h_str));
-                    if DEBUG {
-                        println!("DEBUG: backup modified");
-                    }
                     Ok(())
                 }
                 Err(e) => Err(format!(
@@ -314,7 +299,7 @@ impl RegisteredHotkeys {
     ///Se trova una combinazione valida, chiede l'annullamento della registrazione presso il <i>GlobalHotkeyManager</i>
     ///e ritorna l'esito di tale operazione.
     ///
-    /// NON è possibile fare eseguire da un thread separato perché la libreria GlobalHotkey non funziona
+    /// NON è possibile fare eseguire da un thread diverso dal main thread a causa dei requisiti del crate GlobalHotkeys.
     fn unregister(self: &Arc<Self>, name: HotkeyName) -> Result<(), String> {
         let temp = self
             .backup
@@ -373,9 +358,6 @@ pub fn start_thread_listen_hotkeys(
                     Some((h, _)) => {
                         if h.id() == event.id {
                             main_thr_channel.send(HotkeyName::from(i)).unwrap();
-                            if DEBUG {
-                                println!("hotkey event received");
-                            }
                             arc_ctx.request_repaint();
                         }
                     }
