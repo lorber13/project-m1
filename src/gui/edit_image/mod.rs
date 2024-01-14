@@ -543,7 +543,7 @@ impl EditImage {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
             if ui.button("Abort").clicked() {
                 *ret = FrameEvent::Aborted;
-            } else if ui.button("Save").clicked() {
+            } else if ui.button("Save 💾").clicked() {
                 let (tx, rx) = channel();
                 self.receive_thread = rx;
                 let annotations = self.annotations.clone();
