@@ -139,23 +139,32 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
     painter.rect_stroke(except_rectangle, Rounding::none(), stroke);
 }
 
-/// disegna l'interfaccia che definisce il colore del tratto e il suo spessore
-pub fn stroke_ui_opaque(ui: &mut Ui, stroke: &mut Stroke) {
-    let Stroke { width, color } = stroke;
-    ui.horizontal(|ui| {
-        ui.label("Color:");
-        color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
+pub fn color_ui(ui: &mut Ui, stroke: &mut Stroke) {
+    let Stroke { color, .. } = stroke;
+    ui.label("Color:");
+    color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
+}
 
-        ui.label("Width:");
-        ui.add(DragValue::new(width).speed(0.1).clamp_range(1.0..=5.0))
-            .on_hover_text("Width");
-        // stroke preview:
-        let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
-        ui.painter().line_segment(
-            [stroke_rect.left_center(), stroke_rect.right_center()],
-            (*width, *color),
-        );
-    });
+pub fn width_ui(ui: &mut Ui, stroke: &mut Stroke) {
+    let Stroke { width, .. } = stroke;
+    ui.label("Width:");
+    ui.add(DragValue::new(width).speed(0.1).clamp_range(1.0..=5.0))
+        .on_hover_text("Width");
+}
+
+pub fn stroke_preview(ui: &mut Ui, stroke: &mut Stroke) {
+    let Stroke { width, color } = stroke;
+    let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
+    ui.painter().line_segment(
+        [stroke_rect.left_center(), stroke_rect.right_center()],
+        (*width, *color),
+    );
+}
+
+pub fn shape_ui(ui: &mut Ui, fill_shape: &mut bool) {
+    ui.label("Shape:");
+    ui.selectable_value(fill_shape, true, "filled");
+    ui.selectable_value(fill_shape, false, "border");
 }
 
 /// crea un cerchio (o una circonferenza) in scala rispetto alle dimensioni effettive dell'immagine

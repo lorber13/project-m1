@@ -1,11 +1,10 @@
 pub mod utils;
 
-use crate::gui::edit_image::utils::create_line;
+use crate::gui::edit_image::utils::{color_ui, create_line, shape_ui, stroke_preview, width_ui};
 use crate::gui::loading::show_loading;
 use crate::image_coding::ImageFormat;
-use eframe::egui::color_picker::Alpha;
 use eframe::egui::{
-    color_picker, pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, Key, Layout,
+    pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, InnerResponse, Key, Layout,
     Painter, Pos2, Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions,
     Ui, Vec2,
 };
@@ -17,7 +16,7 @@ use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 use utils::{
     create_arrow, create_circle, create_rect, hover_to_direction, make_rect_legal, obscure_screen,
-    resize_rectangle, scale_annotation, scaled_rect, set_cursor, stroke_ui_opaque, unscaled_point,
+    resize_rectangle, scale_annotation, scaled_rect, set_cursor, unscaled_point,
     write_annotation_to_image, Direction,
 };
 
@@ -514,121 +513,60 @@ impl EditImage {
 
     /// disegna i bottoni principali dell'interfaccia
     fn draw_menu_buttons(&mut self, ui: &mut Ui) -> FrameEvent {
+        let mut ret = FrameEvent::Nil;
         ui.horizontal(|ui| {
-            ui.label("Tool:");
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Rect { .. }), "rectangle")
-                .clicked()
-            {
-                self.current_tool = Tool::Rect {
-                    start_drag: None,
-                    end_drag: None,
-                };
-            }
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Circle { .. }), "circle")
-                .clicked()
-            {
-                self.current_tool = Tool::Circle {
-                    start_drag: None,
-                    end_drag: None,
-                };
-            }
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Pen { .. }), "pen")
-                .clicked()
-            {
-                self.current_tool = Tool::Pen { line: Vec::new() };
-            }
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Line { .. }), "line")
-                .clicked()
-            {
-                self.current_tool = Tool::Line {
-                    first_point: None,
-                    second_point: None,
-                }
-            }
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Arrow { .. }), "arrow")
-                .clicked()
-            {
-                self.current_tool = Tool::Arrow {
-                    start_drag: None,
-                    end_drag: None,
-                };
-            }
-            if ui
-                .selectable_label(matches!(self.current_tool, Tool::Cut { .. }), "cut")
-                .clicked()
-            {
-                self.current_tool = Tool::Cut {
-                    modifying: ModificationOfRectangle::NoModification,
-                };
-            }
-            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                if ui.button("❌").on_hover_text("Clear").clicked() {
-                    self.annotations = Vec::new();
-                }
-                if ui.button("↺").on_hover_text("Undo").clicked() {
-                    self.remove_annotation();
-                }   
-            });
+            self.draw_tool_radio(ui);
+            self.draw_save_ui(&mut ret, ui)
         });
-        if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
-            ui.horizontal(|ui| {
-                ui.label("Shape:");
-                ui.selectable_value(&mut self.fill_shape, true, "filled");
-                ui.selectable_value(&mut self.fill_shape, false, "border");
-            });
-        }
-        match (&self.current_tool, self.fill_shape) {
-            (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
-                ui.horizontal(|ui| {
-                    ui.label("Color:");
-                    color_picker::color_edit_button_srgba(
-                        ui,
-                        &mut self.stroke.color,
-                        Alpha::Opaque,
-                    );
+        ui.horizontal(|ui| {
+            match (&self.current_tool, self.fill_shape) {
+                (Tool::Rect { .. } | Tool::Circle { .. }, true) => {
+                    color_ui(ui, &mut self.stroke);
+                }
+                (Tool::Rect { .. } | Tool::Circle { .. }, false)
+                | (Tool::Pen { .. } | Tool::Line { .. } | Tool::Arrow { .. }, _) => {
+                    color_ui(ui, &mut self.stroke);
+                    width_ui(ui, &mut self.stroke);
+                    stroke_preview(ui, &mut self.stroke);
+                }
+                (Tool::Cut { .. }, _) => {}
+            }
+            if let Tool::Rect { .. } | Tool::Circle { .. } = self.current_tool {
+                shape_ui(ui, &mut self.fill_shape);
+            }
+            self.draw_undo_clear(ui);
+        });
+        ret
+    }
+
+    fn draw_save_ui(&mut self, ret: &mut FrameEvent, ui: &mut Ui) -> InnerResponse<()> {
+        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+            if ui.button("Abort").clicked() {
+                *ret = FrameEvent::Aborted;
+            } else if ui.button("Save").clicked() {
+                let (tx, rx) = channel();
+                self.receive_thread = rx;
+                let annotations = self.annotations.clone();
+                let image = self.image.clone();
+                let cut_rect = self.cut_rect;
+                thread::spawn(move || {
+                    let mut image_blend = Blend(image);
+                    for annotation in annotations {
+                        write_annotation_to_image(&annotation, &mut image_blend);
+                    }
+                    tx.send(
+                        crop_imm(
+                            &image_blend.0,
+                            cut_rect.left_top().x as u32,
+                            cut_rect.left_top().y as u32,
+                            cut_rect.width() as u32,
+                            cut_rect.height() as u32,
+                        )
+                        .to_image(),
+                    )
                 });
             }
-            (Tool::Rect { .. } | Tool::Circle { .. }, false)
-            | (Tool::Pen { .. } | Tool::Line { .. } | Tool::Arrow { .. }, _) => {
-                stroke_ui_opaque(ui, &mut self.stroke);
-            }
-            (Tool::Cut { .. }, _) => {}
-        }
-        ui.horizontal(|ui| {
-            
-            ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-                let mut ret = FrameEvent::Nil;
-                if ui.button("Abort").clicked() {
-                    ret = FrameEvent::Aborted;
-                } else if ui.button("Save").clicked() {
-                    let (tx, rx) = channel();
-                    self.receive_thread = rx;
-                    let annotations = self.annotations.clone();
-                    let image = self.image.clone();
-                    let cut_rect = self.cut_rect;
-                    thread::spawn(move || {
-                        let mut image_blend = Blend(image);
-                        for annotation in annotations {
-                            write_annotation_to_image(&annotation, &mut image_blend);
-                        }
-                        tx.send(
-                            crop_imm(
-                                &image_blend.0,
-                                cut_rect.left_top().x as u32,
-                                cut_rect.left_top().y as u32,
-                                cut_rect.width() as u32,
-                                cut_rect.height() as u32,
-                            )
-                            .to_image(),
-                        )
-                    });
-                }
-                ComboBox::from_label("") //menù a tendina per la scelta del formato di output
+            ComboBox::from_label("") //menù a tendina per la scelta del formato di output
                 .selected_text(format!("{:?}", self.format))
                 .show_ui(ui, |ui| {
                     for f in &ImageFormat::available_formats() {
@@ -639,11 +577,80 @@ impl EditImage {
                         );
                     }
                 });
-                ui.label("Format:");
-                ret
-            })
-            .inner
+            ui.label("Format:");
         })
-        .inner
+    }
+
+    fn draw_tool_radio(&mut self, ui: &mut Ui) {
+        ui.label("Tool:");
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Rect { .. }), "rectangle")
+            .clicked()
+        {
+            self.current_tool = Tool::Rect {
+                start_drag: None,
+                end_drag: None,
+            };
+        }
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Circle { .. }), "circle")
+            .clicked()
+        {
+            self.current_tool = Tool::Circle {
+                start_drag: None,
+                end_drag: None,
+            };
+        }
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Pen { .. }), "pen")
+            .clicked()
+        {
+            self.current_tool = Tool::Pen { line: Vec::new() };
+        }
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Line { .. }), "line")
+            .clicked()
+        {
+            self.current_tool = Tool::Line {
+                first_point: None,
+                second_point: None,
+            }
+        }
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Arrow { .. }), "arrow")
+            .clicked()
+        {
+            self.current_tool = Tool::Arrow {
+                start_drag: None,
+                end_drag: None,
+            };
+        }
+        if ui
+            .selectable_label(matches!(self.current_tool, Tool::Cut { .. }), "cut")
+            .clicked()
+        {
+            self.current_tool = Tool::Cut {
+                modifying: ModificationOfRectangle::NoModification,
+            };
+        }
+    }
+
+    fn draw_undo_clear(&mut self, ui: &mut Ui) {
+        ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+            if ui
+                .button("Clear ❌")
+                .on_hover_text("Remove all annotations")
+                .clicked()
+            {
+                self.annotations = Vec::new();
+            }
+            if ui
+                .button("Undo ↺")
+                .on_hover_text("Remove last annotation written")
+                .clicked()
+            {
+                self.remove_annotation();
+            }
+        });
     }
 }
