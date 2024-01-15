@@ -1,4 +1,4 @@
-use crate::gui::edit_image::utils::obscure_screen;
+quse crate::gui::edit_image::utils::obscure_screen;
 use eframe::egui;
 use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle, TextureOptions};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Sense, Vec2};
@@ -9,7 +9,7 @@ use image::RgbaImage;
 /// Di fatto, l'operazione corrisponde al ritaglio di uno screenshot precedentemente acquisito. Questo screenshot viene acquisito
 /// nel momento della pressione sul bottone "Acquire", successivamente viene messo come
 /// sfondo del frame mostrato a dimensione fullscreen.<br>
-/// Per questo motivo, nella struct sono la stessa immagine è memorizzata in due forme diverse:
+/// Per questo motivo, nella struct la stessa immagine è memorizzata in due forme diverse:
 /// - La <i>TextureHandle</i> viene usata per mostrare tale immagine come sfondo;
 /// - La <i>RgbaImage</i> sarà ritagliata per produrre l'output.<br>
 ///
@@ -39,7 +39,7 @@ impl RectSelection {
 
     /// Mostra una finestra full screen e senza barra di controllo, all'interno della quale viene allocato un oggetto painter
     /// sensibile alle operazioni di click e drag.
-    /// LO sfondo di tale componente è lo screenshot fullscreen passato al costruttore di questa istanza, oscurato con un filtro.
+    /// Lo sfondo di tale componente è lo screenshot fullscreen passato al costruttore di questa istanza, oscurato con un filtro.
     ///
     /// Se viene rilevato click, il punto in cui esso è avvenuto viene memorizzato in <i>self.start_drag_point</i>.<br>
     /// Fino a quando il drag è in corso, utilizzando il painter viene disegnato un rettangolo a partire dai due seguenti vertici:
@@ -65,7 +65,6 @@ impl RectSelection {
 
             ctx.set_cursor_icon(CursorIcon::Crosshair);
 
-            // by default, obscure all the screen (so the default rectangle to save must be empty)
             let mut rect_not_to_be_obscured = Rect::from_min_size(Pos2::ZERO, Vec2::ZERO);
             if !response.clicked() {
                 if response.drag_started() {
@@ -81,9 +80,7 @@ impl RectSelection {
                         (self.start_drag_point, ctx.pointer_hover_pos())
                     {
                         ret = Some((
-                            // todo: with HiDPI screens using scaling the rectangle is wrong
-                            // different displays have different pixels_per_point
-                            Rect::from_points(&[
+                     Rect::from_points(&[
                                 pos2(
                                     click_pos.x * ctx.pixels_per_point(),
                                     click_pos.y * ctx.pixels_per_point(),
@@ -93,9 +90,7 @@ impl RectSelection {
                                     hover_pos.y * ctx.pixels_per_point(),
                                 ),
                             ]),
-                            self.rgba.clone(), // I am obliged
-                                               // to clone the attribute because it is needed for the next frame
-                                               // (it is not obvious that the next frame the status of the app is immediately changed
+                            self.rgba.clone(), 
                         ));
                     }
                 }
