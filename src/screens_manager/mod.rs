@@ -24,8 +24,10 @@ pub struct ScreensManager {
     ///dell'utente. Sono incapsulate in Mutex per permettere la parallelizzazione dell'operazione di creazione delle icone di
     ///tutti gli schermi collegati (utile perché, in quanto operazioni con le immagini,si tratta di computazione onerosa, ma il modulo è disegnato per
     ///essere scalabile nel numero di schermi).
-    screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, //TO DO: valutare RwLock (al posto del Mutex) anche per le icone
+    screens: RwLock<Vec<(Screen, Mutex<Option<RgbaImage>>)>>, 
     ///Indice che fa riferimento al vettore <i>self::screens</i>
+    ///Necessario RwLock al posto di Mutex per evitare che un thread che esegue uno screenshot venga bloccato se
+    ///contemporaneamente la gui mostra la combo box per la selezione degli schermi.
     curr_screen_index: RwLock<usize>,
     ///Larghezza delle icone che verranno prodotte da <i>self::load_icons()</i>.
     icon_width: u32,
@@ -55,7 +57,6 @@ impl ScreensManager {
     ///Infatti, essendo il modulo pensato per essere scalabile nel numero di schermi, la lista può diventare lunga
     ///e le operazioni su di essa onerose.
     ///Per poter eseguire l'elaborazione, il thread dovrà ottenere il lock di <i>self::screens</i> in modalità write.
-    ///Un altro thread che volesse quindi essere
     pub fn update_available_screens(self: &Arc<Self>) {
         let arc_clone = self.clone();
         std::thread::spawn(move || {
@@ -188,6 +189,7 @@ impl ScreensManager {
         }
     }
 
+    ///Non bloccante.
     pub fn try_get_screens<'a>(
         self: &'a Arc<Self>,
     ) -> Option<RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>>> {
@@ -197,6 +199,7 @@ impl ScreensManager {
         }
     }
 
+    ///Bloccante.
     fn get_screens<'a>(
         self: &'a Arc<Self>,
     ) -> RwLockReadGuard<'a, Vec<(Screen, Mutex<Option<RgbaImage>>)>> {

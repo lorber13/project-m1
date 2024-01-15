@@ -139,12 +139,14 @@ pub fn obscure_screen(painter: &Painter, except_rectangle: Rect, stroke: Stroke)
     painter.rect_stroke(except_rectangle, Rounding::none(), stroke);
 }
 
+/// disegna il selettore del colore del tratto
 pub fn color_ui(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { color, .. } = stroke;
     ui.label("Color:");
     color_picker::color_edit_button_srgba(ui, color, Alpha::Opaque);
 }
 
+/// disegna il selettore dello spessore del tratto
 pub fn width_ui(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { width, .. } = stroke;
     ui.label("Width:");
@@ -152,6 +154,7 @@ pub fn width_ui(ui: &mut Ui, stroke: &mut Stroke) {
         .on_hover_text("Width");
 }
 
+/// disegna l'anteprima del tratto
 pub fn stroke_preview(ui: &mut Ui, stroke: &mut Stroke) {
     let Stroke { width, color } = stroke;
     let (_id, stroke_rect) = ui.allocate_space(ui.spacing().interact_size);
@@ -161,6 +164,7 @@ pub fn stroke_preview(ui: &mut Ui, stroke: &mut Stroke) {
     );
 }
 
+/// disegna il selettore con cui si puo' decidere se la forma (cerchio o rettangolo) va riempita o no
 pub fn shape_ui(ui: &mut Ui, fill_shape: &mut bool) {
     ui.label("Shape:");
     ui.selectable_value(fill_shape, true, "filled");
@@ -193,6 +197,7 @@ pub fn create_circle(
     }
 }
 
+/// crea una linea dritta in scala rispetto alle dimensioni effettive dell'immagine
 pub fn create_line(scale_ratio: f32, stroke: Stroke, top_left: Pos2, points: [Pos2; 2]) -> Shape {
     Shape::LineSegment {
         points: [
@@ -324,7 +329,7 @@ pub fn resize_rectangle(
     rectangle
 }
 
-/// In base alla direzione, viene impostato il cursore in ridimensionamento
+/// In base alla direzione, imposta il cursore in ridimensionamento
 pub fn set_cursor(direction: &Direction, ctx: &Context) {
     match direction {
         Direction::Top | Direction::Bottom => {
@@ -425,7 +430,8 @@ pub fn hover_to_direction(
     }
 }
 
-/// scala l'annotazione (cerchio, segmento, quadrato) sulle dimensioni della finestra
+/// scala l'annotazione sulle dimensioni della finestra
+/// la funzione e' ricorsiva, dato che alcune annotazioni sono composte a loro volta da annotazioni
 pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2) {
     match annotation {
         Shape::Rect(rect_shape) => {
@@ -459,7 +465,8 @@ pub fn scale_annotation(annotation: &mut Shape, scale_ratio: f32, top_left: Pos2
 }
 
 /// prima di passare al salvataggio dell'immagine su memoria di massa, le annotazioni vengono scritte sull'immagine, in
-/// memoria RAM
+/// memoria RAM.
+/// Anche questa funzione e' ricorsiva, dato che alcune annotazioni sono composte da altre annotazioni
 pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<RgbaImage>) {
     match annotation {
         Shape::Rect(rect_shape) => {

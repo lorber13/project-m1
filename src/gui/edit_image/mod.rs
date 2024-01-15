@@ -472,12 +472,14 @@ impl EditImage {
         }
     }
 
+    /// se vengono premuti ctrl+z insieme si cancella l'ultima annotazione scritta
     fn handle_ctrl_z(&mut self, ctx: &Context) {
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(Key::Z)) {
             self.remove_annotation();
         }
     }
 
+    /// cancella l'ultima annotazione scritta
     fn remove_annotation(&mut self) {
         self.annotations.pop();
     }
@@ -544,6 +546,7 @@ impl EditImage {
         ret
     }
 
+    /// disegna i bottoni per salvare, tornare alla home e decidere il formato del file di salvataggio
     fn draw_save_ui(&mut self, ret: &mut FrameEvent, ui: &mut Ui) -> InnerResponse<()> {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::RED;
@@ -597,6 +600,7 @@ impl EditImage {
         })
     }
 
+    /// disegna il selettore dello strumento in uso
     fn draw_tool_radio(&mut self, ui: &mut Ui) {
         ui.label("Tool:");
         if ui
@@ -651,6 +655,7 @@ impl EditImage {
         }
     }
 
+    /// disegna i bottoni 'undo' e 'clear'
     fn draw_undo_clear(&mut self, ui: &mut Ui) {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0, 140, 250);

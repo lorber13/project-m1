@@ -125,7 +125,7 @@ impl GlobalGuiState {
         frame.set_decorations(true);
         frame.set_fullscreen(false);
         frame.set_maximized(false);
-        frame.set_window_size(eframe::egui::Vec2::new(500.0, 300.0));
+        frame.set_window_size(Vec2::new(500.0, 300.0));
         frame.set_visible(true);
         self.state = EnumGuiState::MainMenu(MainMenu::new(
             self.alert.clone(),
@@ -416,7 +416,7 @@ impl GlobalGuiState {
 
     ///1. Lancia un thread che, consultando le <i>save_settings</i> dell'applicazione ed eventualmente
     /// mostrando un file dialog, ottiene il path del file di salvataggio dell'immagine;
-    /// 2. salva in <i>GlobalGuiState</i>il <i>Receiver</i> del canale di comunicazione con il thread. 
+    /// 2. salva in <i>GlobalGuiState</i>il <i>Receiver</i> del canale di comunicazione con il thread.
     /// La presenza di tale <i>Receiver</i> nello stato globale causerà la disabilitazione
     /// dell'altra finestra attualmente mostrata.
     fn manage_save_request(&mut self, image: RgbaImage, format: ImageFormat) {
@@ -536,7 +536,10 @@ impl GlobalGuiState {
 }
 
 pub fn launch_gui() {
-    let options = eframe::NativeOptions::default();
+    let options = NativeOptions {
+        min_window_size: Some(Vec2::new(600.0, 300.0)),
+        ..Default::default()
+    };
     eframe::run_native(
         "Simple screenshot App",
         options,
