@@ -2,7 +2,7 @@ pub mod utils;
 
 use crate::gui::edit_image::utils::{color_ui, create_line, shape_ui, stroke_preview, width_ui};
 use crate::gui::loading::show_loading;
-use crate::image_coding::ImageFormat;
+use crate::image_coding::{ImageFormat, self};
 use eframe::egui::{
     pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, InnerResponse, Key, Layout,
     Painter, Pos2, Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions,
@@ -29,6 +29,7 @@ pub enum FrameEvent {
     Saved {
         image: RgbaImage,
         format: ImageFormat,
+        clipboard_receiver: Receiver<Result<(), arboard::Error>>
     },
     Aborted,
     Nil,
@@ -123,9 +124,13 @@ impl EditImage {
     pub fn update(&mut self, ctx: &Context, enabled: bool) -> FrameEvent {
         CentralPanel::default()
             .show(ctx, |ui| match self.receive_thread.try_recv() {
-                Ok(image) => FrameEvent::Saved {
+                Ok(image) => {
+                    let clipboard_receiver = image_coding::start_thread_copy_to_clipboard(&image);
+                    return FrameEvent::Saved {
                     image,
                     format: self.format,
+                    clipboard_receiver
+                    }
                 },
                 Err(error) => match error {
                     TryRecvError::Empty => {
@@ -648,7 +653,7 @@ impl EditImage {
 
     fn draw_undo_clear(&mut self, ui: &mut Ui) {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0,140,250);
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0, 140, 250);
             if ui
                 .button("Clear ❌")
                 .on_hover_text("Remove all annotations")

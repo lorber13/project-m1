@@ -29,7 +29,7 @@ use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use crate::{image_coding, screens_manager};
 use edit_image::EditImage;
-use eframe::egui::{CentralPanel, Rect};
+use eframe::egui::Rect;
 use image::{ImageError, RgbaImage};
 use menu::MainMenu;
 use rect_selection::RectSelection;
@@ -400,7 +400,8 @@ impl GlobalGuiState {
     ) {
         if let EnumGuiState::EditImage(em) = &mut self.state {
             match em.update(ctx, enabled) {
-                FrameEvent::Saved { image, format } => {
+                FrameEvent::Saved { image, format , clipboard_receiver} => {
+                    self.clipboard = Some(clipboard_receiver);
                     self.manage_save_request(image, format);
                 }
                 FrameEvent::Aborted => {
@@ -574,6 +575,7 @@ impl eframe::App for GlobalGuiState {
         }
 
         self.registered_hotkeys.set_listen_enabled(true); //abilito di default l'ascolto delle hotkeys (potrà essere disabilitato dalle funzioni chiamate nei rami del match)
+        self.manage_clipboard();
 
         match &mut self.state {
             EnumGuiState::MainMenu(..) => {
@@ -589,7 +591,6 @@ impl eframe::App for GlobalGuiState {
                 self.show_rect_selection(ctx, frame);
             }
             EnumGuiState::LoadingEditImage(..) => {
-                self.manage_clipboard();
                 self.load_edit_image(ctx, frame);
             }
             EnumGuiState::EditImage(..) => {
