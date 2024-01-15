@@ -145,47 +145,58 @@ impl RegisteredHotkeys {
     ///Metodo da richiamare <b>sempre</b> prima di iniziare una sessione di modifica.
     ///Copia il contenuto di <i>self::backup</i> in <i>self::vec</i> in modo che quest'ultimo possa essere
     ///modificato a partire da dati consistenti.
+    /// Per non bloccare il main thread e rendere l'operazione veloce a prescindere dal numero di hotkeys,
+    /// un thread padre lancia un figlio per ogni entry dei vettori, i thread figli eseguono la copia in 
+    /// parallelo.
     ///
-    ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia,
-    ///eseguita da un altro thread, termini.
+    ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia
+    ///termini.
     pub fn prepare_for_updates(self: &Arc<Self>) -> Receiver<()> {
         let (tx, rx) = channel();
         let self_clone = self.clone();
 
         std::thread::spawn(move || {
+            let mut jh = vec![];
             for i in 0..N_HOTK {
-                let temp1;
-                let temp2;
-                {
-                    temp1 = self_clone.vec.get(i).unwrap().read().unwrap().clone();
-                    temp2 = self_clone.backup.get(i).unwrap().read().unwrap().clone();
-                }
-                match (temp1, temp2) {
-                    (None, None) => (),
-                    (None, Some((_, s))) => {
-                        self_clone
-                            .vec
-                            .get(i)
-                            .unwrap()
-                            .write()
-                            .unwrap()
-                            .replace(s.clone());
+                let self_clonex2 = self_clone.clone();
+                jh.push(std::thread::spawn(move || {
+                    let temp1;
+                    let temp2;
+                    {
+                        temp1 = self_clonex2.vec.get(i).unwrap().read().unwrap().clone();
+                        temp2 = self_clonex2.backup.get(i).unwrap().read().unwrap().clone();
                     }
-                    (Some(_), None) => {
-                        self_clone.vec.get(i).unwrap().write().unwrap().take();
-                    }
-                    (Some(s1), Some((_, s2))) => {
-                        if s1.cmp(&s2) != Ordering::Equal {
-                            self_clone
+                    match (temp1, temp2) {
+                        (None, None) => (),
+                        (None, Some((_, s))) => {
+                            self_clonex2
                                 .vec
                                 .get(i)
                                 .unwrap()
                                 .write()
                                 .unwrap()
-                                .replace(s2.clone());
+                                .replace(s.clone());
+                        }
+                        (Some(_), None) => {
+                            self_clonex2.vec.get(i).unwrap().write().unwrap().take();
+                        }
+                        (Some(s1), Some((_, s2))) => {
+                            if s1.cmp(&s2) != Ordering::Equal {
+                                self_clonex2
+                                    .vec
+                                    .get(i)
+                                    .unwrap()
+                                    .write()
+                                    .unwrap()
+                                    .replace(s2.clone());
+                            }
                         }
                     }
-                }
+                }))
+            }
+            for j in jh
+            {
+                let _ = j.join();
             }
             let _ = tx.send(());
         });
