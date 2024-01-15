@@ -1,4 +1,4 @@
-quse crate::gui::edit_image::utils::obscure_screen;
+use crate::gui::edit_image::utils::obscure_screen;
 use eframe::egui;
 use eframe::egui::{Context, CursorIcon, Stroke, TextureHandle, TextureOptions};
 use egui::{pos2, Color32, ColorImage, Pos2, Rect, Sense, Vec2};
@@ -80,7 +80,7 @@ impl RectSelection {
                         (self.start_drag_point, ctx.pointer_hover_pos())
                     {
                         ret = Some((
-                     Rect::from_points(&[
+                            Rect::from_points(&[
                                 pos2(
                                     click_pos.x * ctx.pixels_per_point(),
                                     click_pos.y * ctx.pixels_per_point(),
@@ -90,7 +90,7 @@ impl RectSelection {
                                     hover_pos.y * ctx.pixels_per_point(),
                                 ),
                             ]),
-                            self.rgba.clone(), 
+                            self.rgba.clone(),
                         ));
                     }
                 }
