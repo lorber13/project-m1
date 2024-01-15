@@ -6,7 +6,6 @@ use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
-
 ///Il numero di varianti della enum HotkeyName. Il modulo Hotkeys è predisposto per scalare ad un maggiore
 ///numero di hotkeys.
 pub const N_HOTK: usize = 2;
@@ -250,7 +249,6 @@ impl RegisteredHotkeys {
     /// NON è possibile fare eseguire da un thread separato perché non compatibile con i requisiti del crate GlobalHotkey.
     fn register(self: &Arc<Self>, h_str: String, name: HotkeyName) -> Result<(), String> {
         if let Ok(h) = HotKey::from_str(&h_str) {
-
             return match self.ghm.register(h) {
                 Ok(()) => {
                     self.backup

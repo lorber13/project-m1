@@ -5,9 +5,8 @@ use arboard::{Clipboard, ImageData};
 use eframe::emath::Rect;
 use image::{ImageError, RgbaImage};
 use std::fs::File;
-use std::vec;
 use std::sync::mpsc::{channel, Receiver};
-
+use std::vec;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -30,10 +29,12 @@ impl Into<&str> for ImageFormat {
 impl From<&str> for ImageFormat {
     fn from(s: &str) -> Self {
         match s {
-            "Png" | "PNG" | "png" => Self::Png ,
-            "Jpeg" | "JPEG" | "jpeg" => Self::Jpeg ,
-            "Gif" | "gif" | "GIF" => Self::Gif ,
-            &_ => {unreachable!("Non recognized extension");}
+            "Png" | "PNG" | "png" => Self::Png,
+            "Jpeg" | "JPEG" | "jpeg" => Self::Jpeg,
+            "Gif" | "gif" | "GIF" => Self::Gif,
+            &_ => {
+                unreachable!("Non recognized extension");
+            }
         }
     }
 }
@@ -41,11 +42,7 @@ impl From<&str> for ImageFormat {
 impl ImageFormat {
     ///Utility per ottenere l'elenco dei formati contenuti nella enum sotto forma di stringhe.
     pub fn available_formats() -> Vec<ImageFormat> {
-        vec![
-            ImageFormat::Png,
-            ImageFormat::Jpeg,
-            ImageFormat::Gif,
-        ]
+        vec![ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::Gif]
     }
 }
 
@@ -106,9 +103,7 @@ pub fn start_thread_save_image(
     let (tx, rx) = channel();
     let path_str = path.as_os_str().to_str().unwrap().to_string();
     std::thread::spawn(move || {
-
-        let _ = tx.send(save_image(path, img)
-                        .map_or_else(|res| Err(res), |()| Ok(path_str)));
+        let _ = tx.send(save_image(path, img).map_or_else(|res| Err(res), |()| Ok(path_str)));
     });
     rx
 }
@@ -153,10 +148,7 @@ mod tests {
     #[test]
     fn save_test() {
         let img = image::RgbaImage::new(0, 0);
-        let r = crate::image_coding::start_thread_save_image(
-            "./test.png".into(),
-            img,
-        );
+        let r = crate::image_coding::start_thread_save_image("./test.png".into(), img);
         assert!(r.recv().is_ok());
         assert!(PathBuf::from("./test.png").exists());
     }

@@ -541,9 +541,17 @@ impl EditImage {
 
     fn draw_save_ui(&mut self, ret: &mut FrameEvent, ui: &mut Ui) -> InnerResponse<()> {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
-            if ui.button("Abort 🏠").on_hover_text("Go to Home without saving").clicked() {
+            if ui
+                .button("Abort 🏠")
+                .on_hover_text("Go to Home without saving")
+                .clicked()
+            {
                 *ret = FrameEvent::Aborted;
-            } else if ui.button("Save 💾").on_hover_text("The format will be the selected one.").clicked() {
+            } else if ui
+                .button("Save 💾")
+                .on_hover_text("The format will be the selected one.")
+                .clicked()
+            {
                 let (tx, rx) = channel();
                 self.receive_thread = rx;
                 let annotations = self.annotations.clone();

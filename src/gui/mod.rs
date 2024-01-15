@@ -229,17 +229,15 @@ impl GlobalGuiState {
         if let EnumGuiState::WaitingForDelay(opt_jh, area) = &mut self.state {
             let jh = opt_jh.take().unwrap();
             match jh.join() {
-                Ok(_) => {
-                    match *area {
-                        ScreenshotDim::Fullscreen => {
-                            self.switch_to_edit_image(None, ctx, frame);
-                        }
-                        ScreenshotDim::Rectangle => {
-                            frame.set_visible(false);
-                            self.switch_to_rect_selection(frame);
-                        }
+                Ok(_) => match *area {
+                    ScreenshotDim::Fullscreen => {
+                        self.switch_to_edit_image(None, ctx, frame);
                     }
-                }
+                    ScreenshotDim::Rectangle => {
+                        frame.set_visible(false);
+                        self.switch_to_rect_selection(frame);
+                    }
+                },
                 _ => {
                     self.alert.borrow_mut().replace("Timer error".to_string());
                     self.switch_to_main_menu(frame);
@@ -271,23 +269,21 @@ impl GlobalGuiState {
     fn load_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         match &mut self.state {
             EnumGuiState::LoadingRectSelection(r) => match r.recv() {
-                Ok(msg) => {
-                    match msg {
-                        Ok(img) => {
-                            frame.set_visible(true);
-                            frame.set_fullscreen(true);
-                            let rs = RectSelection::new(img, ctx);
-                            self.state = EnumGuiState::RectSelection(rs);
-                        }
-                        Err(error_message) => {
-                            self.alert
-                                .borrow_mut()
-                                .replace("An error occurred. Impossible to continue.".to_string());
-                            let _ = writeln!(std::io::stderr(), "Error: {}", error_message);
-                            self.switch_to_main_menu(frame);
-                        }
+                Ok(msg) => match msg {
+                    Ok(img) => {
+                        frame.set_visible(true);
+                        frame.set_fullscreen(true);
+                        let rs = RectSelection::new(img, ctx);
+                        self.state = EnumGuiState::RectSelection(rs);
                     }
-                }
+                    Err(error_message) => {
+                        self.alert
+                            .borrow_mut()
+                            .replace("An error occurred. Impossible to continue.".to_string());
+                        let _ = writeln!(std::io::stderr(), "Error: {}", error_message);
+                        self.switch_to_main_menu(frame);
+                    }
+                },
                 Err(_) => {
                     self.alert.borrow_mut().replace(
                         "An error occurred when trying to start the service. Please retry."
@@ -335,9 +331,9 @@ impl GlobalGuiState {
     ) {
         if let Some((rect, img)) = opt_rect_img {
             frame.set_decorations(true);
-        frame.set_fullscreen(false);
-        frame.set_maximized(false);
-        frame.set_visible(true);
+            frame.set_fullscreen(false);
+            frame.set_maximized(false);
+            frame.set_visible(true);
             self.state =
                 EnumGuiState::LoadingEditImage(image_coding::start_thread_crop_image(rect, img));
         } else {
@@ -371,9 +367,9 @@ impl GlobalGuiState {
 
                     let em = EditImage::new(img, ctx);
                     frame.set_decorations(true);
-        frame.set_fullscreen(false);
-        frame.set_maximized(true);
-        frame.set_visible(true);
+                    frame.set_fullscreen(false);
+                    frame.set_maximized(true);
+                    frame.set_visible(true);
                     self.state = EnumGuiState::EditImage(em);
                 }
                 Err(TryRecvError::Empty) => {
@@ -561,14 +557,12 @@ impl eframe::App for GlobalGuiState {
     /// Se invece lo stato di errore globale non è vuoto, mostra un alert con il messaggio che descrive tale errore.
     /// Se invece è aperto un file dialog, mostra la schermata corrente disabilitata.
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-
-
         let main_window_enabled = self.alert.borrow().is_none()
             && self.pending_save_request.is_none()
             && self.directory_dialog_receiver.is_none();
 
         //se non è ancora stato fatto partire il thread che ascolta le hotkey, si crea un canale di comunicazione e si richiama l'apposita funzione del modulo hotkeys.
-        //È necessario mettere questa istruzione all'interno di GlobalGuiState::update() per poter avere 
+        //È necessario mettere questa istruzione all'interno di GlobalGuiState::update() per poter avere
         // ctx da passare come parametro; ed inoltre per tutela contro eventuali arresti del thread: esso viene rilanciato
         //così in automatico.
         if self.hotkey_receiver.is_none() {

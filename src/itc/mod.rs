@@ -35,7 +35,7 @@ pub struct Delay {
 ///Secondi
 const DELAY_ANIMATIONS_WINDOWS: f32 = 0.25;
 ///Secondi
-const DELAY_ANIMATIONS_LINUX: f32 = 0.25; 
+const DELAY_ANIMATIONS_LINUX: f32 = 0.25;
 
 ///Ritorna la durata dell'animazione di scomparsa della finestra nello specifico
 /// sistema operativo in uso.

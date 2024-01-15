@@ -57,10 +57,9 @@ pub fn show_directory_dialog(start_dir: Option<String>) -> Option<PathBuf> {
     FileDialog::new().set_directory(dir).pick_folder()
 }
 
-pub fn start_thread_directory_dialog(start_dir: Option<String>) -> Receiver<Option<PathBuf>>
-{
+pub fn start_thread_directory_dialog(start_dir: Option<String>) -> Receiver<Option<PathBuf>> {
     let (tx, rx) = channel();
-    std::thread::spawn(move||{
+    std::thread::spawn(move || {
         let _ = tx.send(show_directory_dialog(start_dir));
     });
     rx
