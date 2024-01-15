@@ -43,6 +43,8 @@ use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use eframe::NativeOptions;
+use eframe::egui::Vec2;
 
 /// Possibili valori dello stato interno della macchina a stati realizzata dalla struct <i>GlobalGuiState</i>.
 pub enum EnumGuiState {
