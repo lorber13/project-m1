@@ -361,7 +361,7 @@ impl GlobalGuiState {
         if let EnumGuiState::LoadingEditImage(r) = &mut self.state {
             match r.try_recv() {
                 Ok(Ok(img)) => {
-                    if self.save_settings.borrow().copy_on_clipboard {
+                    if self.save_settings.borrow().get_copy_on_clipboard() {
                         self.clipboard = Some(start_thread_copy_to_clipboard(&img));
                     }
                     frame.set_decorations(true);

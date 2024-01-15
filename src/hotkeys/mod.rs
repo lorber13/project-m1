@@ -2,6 +2,7 @@ use eframe::egui::Context;
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use std::cmp::Ordering;
+use std::io::{Read, BufReader, BufRead, BufWriter, Write};
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -89,6 +90,8 @@ pub struct RegisteredHotkeys {
 }
 
 impl RegisteredHotkeys {
+    const CONFIG_FILE_NAME: &'static str = ".config_hotkeys";
+
     /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti.
     ///Imposta <i>listen_enabled</i> a true di default.
     ///Ritorna la struttura già incapsulata in un <i>Arc</i>.
@@ -99,13 +102,53 @@ impl RegisteredHotkeys {
             vec.push(RwLock::new(None));
             backup.push(RwLock::new(None));
         }
-        let ret = Self {
+        let ret = Arc::new(Self {
             vec,
             backup,
             ghm: GlobalHotKeyManager::new().unwrap(),
             listen_enabled: RwLock::new(true),
-        };
-        Arc::new(ret)
+        });
+
+        match std::fs::File::open(Self::CONFIG_FILE_NAME)
+        {
+            Ok(f) =>
+            {
+                let mut buf = BufReader::new(f);
+                let mut line = String::new();
+                let mut i = 0;
+                while let Ok(n) = buf.read_line(&mut line)
+                {
+                    if n > 0 {ret.vec.get(i).unwrap().write().unwrap().replace(line.clone());}
+                    i += 1;
+                }
+                let _ = ret.update_changes();
+            }
+            _ => ()
+        }
+        ret
+    }
+
+    pub fn serialize(self: Arc<Self>)
+    {
+        let arc_clone = self.clone();
+        std::thread::spawn(move ||
+        {
+            if let Ok(f) = std::fs::File::create(Self::CONFIG_FILE_NAME)
+            {
+                for rl in arc_clone.backup
+                {
+                    let g = rl.read().unwrap();
+                    if let Some((_,s)) = *g {
+                        f.write();
+                    }else{
+                        f.write("");
+                    }
+                }
+
+            }
+            
+            
+        });
     }
 
     ///Copia il contenuto di <i>self::vec</i> dentro a <i>self::backup</i>,

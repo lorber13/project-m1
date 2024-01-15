@@ -1,29 +1,30 @@
 
 
 use eframe::egui::{self, ScrollArea};
+use serde::{Serialize, Deserialize};
 use crate::itc::SettingsEvent;
 use chrono::Local;
 use std::cell::RefCell;
 use super::file_dialog;
 use std::rc::Rc;
-use std::cell::Cell;
 use crate::image_coding::ImageFormat;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
+use std::io::Read;
 
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct DefaultDir
 {
     enabled: bool,
     path: String
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 enum DefaultNameMode
 {
     OnlyName,
-    Counter(u64),
+    Counter,
     Timestamp
 }
 
@@ -34,7 +35,7 @@ impl Into<&'static str> for DefaultNameMode
         match self
         {
             Self::OnlyName => "Default name",
-            Self::Counter(..) => "Default name + incremental number",
+            Self::Counter => "Default name + incremental number",
             Self::Timestamp => "Default name + timestamp"
         }
     }
@@ -44,16 +45,16 @@ impl PartialEq for DefaultNameMode
 {
     fn eq(&self, other: &Self) -> bool {
 
-        matches!((self, other), (DefaultNameMode::Counter(..), DefaultNameMode::Counter(..)) | (DefaultNameMode::Timestamp, DefaultNameMode::Timestamp))
+        matches!((self, other), (DefaultNameMode::Counter, DefaultNameMode::Counter) | (DefaultNameMode::Timestamp, DefaultNameMode::Timestamp))
     }
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct DefaultName
 {
     enabled: bool,
-    mode: Cell<DefaultNameMode>,
+    mode: DefaultNameMode,
     name: String
 }
 
@@ -63,20 +64,41 @@ struct DefaultName
 #[derive(Clone)]
 pub struct SaveSettings
 {
-    default_dir: DefaultDir,
-    default_name: DefaultName,
-    pub copy_on_clipboard: bool, 
+    mem: Memory, 
     /// Riferimento allo stato di errore globale dell'applicazione.
     alert: Rc<RefCell<Option<String>>>
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct Memory
+{
+    default_dir: DefaultDir,
+    default_name: DefaultName,
+    copy_on_clipboard: bool, 
+}
+
 impl SaveSettings
 {
+    const CONFIG_FILE_NAME: &'static str = ".config_save";
+
     pub fn new(alert: Rc<RefCell<Option<String>>>) -> Self
     {
-        Self {default_dir: DefaultDir { enabled: false, path: "".to_string() }, 
-                default_name: DefaultName { enabled: false, name: "".to_string(), mode: Cell::new(DefaultNameMode::Timestamp),},
-                copy_on_clipboard: true,
+        match std::fs::File::open(Self::CONFIG_FILE_NAME)
+        {
+            Ok(f) =>
+            {
+                match serde_json::from_reader(f)
+                {
+                    Ok(mem) => return Self{mem, alert},
+                    _ => ()
+                }
+
+            }
+            _ => ()
+        }
+        Self {mem: Memory {default_dir: DefaultDir { enabled: false, path: "".to_string() }, 
+                default_name: DefaultName { enabled: false, name: "".to_string(), mode: DefaultNameMode::Timestamp,},
+                copy_on_clipboard: true}, 
                 alert
             }
     }
@@ -101,14 +123,23 @@ impl SaveSettings
 
         let dd_opt = self.get_default_dir();
         let dn_opt = self.get_default_name();
+        let mode = self.mem.default_name.mode;
         let (tx, rx) = channel();
         std::thread::spawn(move||{
             match (dd_opt, dn_opt) {
                 (Some(dp), Some(dn)) => {
                     let mut pb = PathBuf::from(dp);
                     let ext: &str = format.into();
-                    pb.push("temp");
-                    pb.set_file_name(dn);
+                    pb.push("temp"); //per fare si che quando si setta il nome del file non si sovrascriva il nome della parent dir
+                    let file = match mode
+                    {
+                        DefaultNameMode::Counter =>
+                        {
+                            Self::get_incremental_filename(&dn,format, &pb)
+                        }
+                        _ => dn
+                    };
+                    pb.set_file_name(file);
                     pb.set_extension(ext);
                     let _ = tx.send(Some(pb));
                     return;
@@ -118,7 +149,15 @@ impl SaveSettings
                     let dir_opt = file_dialog::show_directory_dialog(None);
                     if let Some(mut pb) = dir_opt {
                         let ext: &str = format.into();
-                        pb.set_file_name(dn);
+                        let file = match mode
+                    {
+                        DefaultNameMode::Counter =>
+                        {
+                            Self::get_incremental_filename(&dn, format, &pb)
+                        }
+                        _ => dn
+                    };
+                        pb.set_file_name(file);
                         pb.set_extension(ext);
                         let _ = tx.send(Some(pb));
                         return;
@@ -180,13 +219,13 @@ impl SaveSettings
             ui.separator();
             ui.label(egui::RichText::new("Save settings").heading());
             ui.separator();
-            ui.add(egui::Checkbox::new(&mut self.default_dir.enabled, "Save all screenshot in a default directory"));
+            ui.add(egui::Checkbox::new(&mut self.mem.default_dir.enabled, "Save all screenshot in a default directory"));
             ui.style_mut().spacing.button_padding = egui::vec2(12.0, 3.0);
-            ui.add_enabled_ui(self.default_dir.enabled, |ui|
+            ui.add_enabled_ui(self.mem.default_dir.enabled, |ui|
             {
                 ui.horizontal(|ui|
                         {
-                            ui.add(egui::TextEdit::singleline(&mut self.default_dir.path));
+                            ui.add(egui::TextEdit::singleline(&mut self.mem.default_dir.path));
                             if ui.button("📁").clicked()
                             {
                                 ret = SettingsEvent::OpenDirectoryDialog;
@@ -195,30 +234,22 @@ impl SaveSettings
             });
             ui.separator();
 
-            ui.add(egui::Checkbox::new(&mut self.default_name.enabled, "Default file name"));
-            ui.add_enabled_ui(self.default_name.enabled, |ui|
+            ui.add(egui::Checkbox::new(&mut self.mem.default_name.enabled, "Default file name"));
+            ui.add_enabled_ui(self.mem.default_name.enabled, |ui|
             {
                 ui.horizontal(|ui| {
-                    let former = self.default_name.name.clone();
-                    let res1 = ui.add(egui::TextEdit::singleline(&mut self.default_name.name));
-                    if res1.lost_focus() && self.default_name.name != former 
-                    {
-                        if let DefaultNameMode::Counter(_) = self.default_name.mode.get()
-                        {
-                            self.default_name.mode.replace(DefaultNameMode::Counter(0));
-                        }
-                    }
+                    ui.add(egui::TextEdit::singleline(&mut self.mem.default_name.name));
 
                     egui::ComboBox::from_label("Naming Mode") //prova di menù a tendina per scegliere se fare uno screen di tutto, oppure per selezionare un rettangolo
-                    .selected_text(<DefaultNameMode as Into<&'static str>>::into(self.default_name.mode.get()))
+                    .selected_text(<DefaultNameMode as Into<&'static str>>::into(self.mem.default_name.mode))
                     .show_ui(ui, |ui|{
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.default_name.mode.get(), DefaultNameMode::OnlyName, <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::OnlyName))
+                        ui.selectable_value(&mut self.mem.default_name.mode, DefaultNameMode::OnlyName, <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::OnlyName))
                         .on_hover_text("If exists another file with the same name in the dir, it will be overwritten.");
-                        ui.selectable_value(&mut self.default_name.mode.get(), DefaultNameMode::Counter(0), <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::Counter(0)))
+                        ui.selectable_value(&mut self.mem.default_name.mode, DefaultNameMode::Counter, <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::Counter))
                         .on_hover_text("If exists another file with the same name in the dir, it will be overwritten.");
-                        ui.selectable_value(&mut self.default_name.mode.get(), DefaultNameMode::Timestamp, <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::Timestamp))
+                        ui.selectable_value(&mut self.mem.default_name.mode, DefaultNameMode::Timestamp, <DefaultNameMode as Into<&'static str>>::into(DefaultNameMode::Timestamp))
                         .on_hover_text("timestamp format: YYYY-MM-DD_HH-MM-SS");
                     });
                     
@@ -229,7 +260,7 @@ impl SaveSettings
             ui.separator();
 
             ui.add_space(10.0);
-            ui.checkbox(&mut self.copy_on_clipboard, "Copy on clipboard")
+            ui.checkbox(&mut self.mem.copy_on_clipboard, "Copy on clipboard")
             .on_hover_text("When you acquire a screenshot, the acquired image is automatically copied in you clipboard.\nNote that modifications to the image performed after the acquire phase are not included.");
             ui.separator();
 
@@ -239,13 +270,14 @@ impl SaveSettings
                 {
                     ui.style_mut().visuals.widgets.hovered.weak_bg_fill = egui::Color32::DARK_GREEN;
                     if ui.button("Save").clicked() {
-                        if self.default_dir.enabled && ( self.default_dir.path.is_empty() || !std::path::Path::new(&self.default_dir.path).exists())
+                        if self.mem.default_dir.enabled && ( self.mem.default_dir.path.is_empty() || !std::path::Path::new(&self.mem.default_dir.path).exists())
                         {
                             self.alert.borrow_mut().replace("Invalid default directory path.".to_string());
-                        }else if self.default_name.enabled && self.default_name.mode.get() == DefaultNameMode::OnlyName && self.default_name.name.is_empty()
+                        }else if self.mem.default_name.enabled && self.mem.default_name.mode == DefaultNameMode::OnlyName && self.mem.default_name.name.is_empty()
                         {
                             self.alert.borrow_mut().replace("Default name cannot be empty.".to_string());
                         }else {
+                            self.start_thread_serialize();
                             ret = SettingsEvent::Saved;
                         }
                     }
@@ -260,52 +292,57 @@ impl SaveSettings
 
     }
 
+    pub fn start_thread_serialize(&self)
+    {
+        let mem = self.mem.clone();
+        std::thread::spawn(move||
+        {
+            if let Ok(f) = std::fs::File::create(Self::CONFIG_FILE_NAME)
+            {
+                let _ = serde_json::to_writer(f, &mem);
+            } 
+        });
+    }
+
 
     /// Ritorna:
-    /// - <i>None</i>, se il salvataggio in una cartella di default è disabilitato (<i>self.default_dir.enabled == false</i>), 
+    /// - <i>None</i>, se il salvataggio in una cartella di default è disabilitato (<i>self.mem.default_dir.enabled == false</i>), 
     ///     oppure nullo o invalido (<i>NOTA: un path potrebbe essere diventato invalido se l'albero del file system è cambiato
     ///     dopo che le SaveSettings sono state salvate correttamente</i>);
     /// - <i>Some()<i>, contenente il path scritto sotto forma di stringa altrimenti.
     pub fn get_default_dir(&self) -> Option<String>
     {
-        if !self.default_dir.enabled || self.default_dir.path.len() == 0 
-            || !std::path::Path::new(&self.default_dir.path).exists() {return None;}
+        if !self.mem.default_dir.enabled || self.mem.default_dir.path.len() == 0 
+            || !std::path::Path::new(&self.mem.default_dir.path).exists() {return None;}
 
-        Some(self.default_dir.path.clone())
+        Some(self.mem.default_dir.path.clone())
     }
 
     /// Ritorna:
-    /// - <i>None<i>, se il salvataggio con un nome di default è disabilitato (<i>self.default_name.enabled == false</i>);
+    /// - <i>None<i>, se il salvataggio con un nome di default è disabilitato (<i>self.mem.default_name.enabled == false</i>);
     /// - <i>Some()<i>, contenente il nome per il prossimo file da salvare altrimenti.<br>
-    ///     - Nel caso <i>self.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, calcola e formatta il timestamp
+    ///     - Nel caso <i>self.mem.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, calcola e formatta il timestamp
     ///         corrente e lo concatena alla stringa del default name.<br>
-    ///     - Nel caso <i>self.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, concatena alla stringa del default name
+    ///     - Nel caso <i>self.mem.default_name.mode</i> sia <i>DefaultNameMode::Timestamp</i>, concatena alla stringa del default name
     ///         il valore del contatore, poi lo incrementa.<br>
-    ///         (<i>NOTA: il campo self.default_name.mode è stato inserito in 
+    ///         (<i>NOTA: il campo self.mem.default_name.mode è stato inserito in 
     ///         una Cell per permettere a questo metodo di ricevere come parametro self com riferimento non mutabile, nascondendo
     ///         così il meccanismo di incremento interno del contatore</i>)
     pub fn get_default_name(&self) -> Option<String>
     {
-        if !self.default_name.enabled {return None;}
+        if !self.mem.default_name.enabled {return None;}
     
-        match self.default_name.mode.get()
+        match self.mem.default_name.mode
         {
-            DefaultNameMode::OnlyName =>
+            DefaultNameMode::OnlyName |  DefaultNameMode::Counter =>
             {
-                Some(self.default_name.name.clone())
-            },
-
-            DefaultNameMode::Counter(c) => 
-            {
-                let str = format!("{}{}", self.default_name.name, c);
-                self.default_name.mode.replace(DefaultNameMode::Counter(c+1));
-                Some(str)
+                Some(self.mem.default_name.name.clone())
             },
 
             DefaultNameMode::Timestamp =>
             {
                 const TIMESTAMP_FMT: &str = "%Y-%m-%d_%H%M%S";
-                let str = format!("{}{}", self.default_name.name, Local::now().format(TIMESTAMP_FMT));
+                let str = format!("{}{}", self.mem.default_name.name, Local::now().format(TIMESTAMP_FMT));
                 Some(str)
             }
         }
@@ -315,11 +352,40 @@ impl SaveSettings
 
     pub fn set_default_directory(&mut self, dir: String)
     {
-        if self.default_dir.enabled {
-            self.default_dir.path = dir;
+        if self.mem.default_dir.enabled {
+            self.mem.default_dir.path = dir;
         }   
     }
+
+    fn get_incremental_filename(filename: &str, format: ImageFormat, dir: &PathBuf) -> String
+    {
+        let mut pb = PathBuf::from(dir);
+        let mut counter: usize = 0;
+        let mut ret = String::from(filename);
+        ret.push_str(&counter.to_string());
+        let ext: &str = format.into();
+        loop 
+        {
+            pb.set_file_name(ret.clone());
+            pb.set_extension(ext);
+            if !pb.exists()
+            {
+                return ret;
+            }
+            counter += 1;
+            ret = String::from(filename);
+            ret.push_str(&counter.to_string());
+        }
+    }
+
+    pub fn get_copy_on_clipboard(&self) -> bool
+    {
+        self.mem.copy_on_clipboard
+    }
 }
+
+
+
 
 #[cfg(test)]
 mod tests
@@ -331,8 +397,8 @@ mod tests
         let _ = std::fs::remove_dir("./dd");
         std::fs::create_dir("./dd").unwrap();
         let mut ss = SaveSettings::new(Rc::new(RefCell::new(None)));
-        ss.default_dir = DefaultDir{path: PathBuf::from("dd").to_str().unwrap().to_string(), enabled: true};
-        ss.default_name = DefaultName{enabled: true, name: "dn".to_string(), mode: Cell::new(DefaultNameMode::OnlyName)};
+        ss.mem.default_dir = DefaultDir{path: PathBuf::from("dd").to_str().unwrap().to_string(), enabled: true};
+        ss.mem.default_name = DefaultName{enabled: true, name: "dn".to_string(), mode: DefaultNameMode::OnlyName};
         ss
     }
 
@@ -358,7 +424,7 @@ mod tests
     fn get_default_name_test()
     {
         let mut ss = create_ss();
-        ss.default_name.mode = Cell::new(DefaultNameMode::Counter(0));
+        ss.mem.default_name.mode = DefaultNameMode::Counter;
         assert_eq!(ss.get_default_name().unwrap(), "dn0");
         assert_eq!(ss.get_default_name().unwrap(), "dn1");
         assert_eq!(ss.get_default_name().unwrap(), "dn2");
