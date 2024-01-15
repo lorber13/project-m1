@@ -541,13 +541,16 @@ impl EditImage {
 
     fn draw_save_ui(&mut self, ret: &mut FrameEvent, ui: &mut Ui) -> InnerResponse<()> {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::RED;
             if ui
                 .button("Abort 🏠")
                 .on_hover_text("Go to Home without saving")
                 .clicked()
             {
                 *ret = FrameEvent::Aborted;
-            } else if ui
+            }
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::DARK_GREEN;
+            if ui
                 .button("Save 💾")
                 .on_hover_text("The format will be the selected one.")
                 .clicked()
@@ -645,6 +648,7 @@ impl EditImage {
 
     fn draw_undo_clear(&mut self, ui: &mut Ui) {
         ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+            ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0,140,250);
             if ui
                 .button("Clear ❌")
                 .on_hover_text("Remove all annotations")
