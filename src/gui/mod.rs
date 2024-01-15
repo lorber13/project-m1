@@ -29,7 +29,7 @@ use crate::image_coding::{start_thread_copy_to_clipboard, ImageFormat};
 use crate::itc::ScreenshotDim;
 use crate::{image_coding, screens_manager};
 use edit_image::EditImage;
-use eframe::egui::Rect;
+use eframe::egui::{CentralPanel, Rect};
 use image::{ImageError, RgbaImage};
 use menu::MainMenu;
 use rect_selection::RectSelection;
@@ -349,27 +349,24 @@ impl GlobalGuiState {
     /// - Se la <i>recv()</i> ha successo:
     ///     1. avvia il thread per copiare nella clipboard l'immagine ricevuta tramite il canale;
     ///     2. richiama EditImage::new(), a cui passa l'immagine ricevuta tramite il canale;
-    ///     3. cambia lo stato corrente in <i>EnumGuiState::EditImage</i>, in cui memorizza a nuova istanza di <i>EditImage</i>.
+    ///     3. cambia lo stato corrente in <i>EnumGuiState::EditImage</i>, in cui memorizza una nuova istanza di <i>EditImage</i>.
     /// - Se il canale è vuoto, mostra uno spinner;
     /// - Se il canale è stato chiuso inaspettatamente, scrive un messaggio di errore nello stato di errore globale.
     ///
     /// <h3>Panics:</h3>
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::LoadingEditImage</i>.
     fn load_edit_image(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        if let EnumGuiState::LoadingEditImage(r) = &mut self.state
-        //attesa dell'immagine da caricare
-        {
+        if let EnumGuiState::LoadingEditImage(r) = &mut self.state {
             match r.try_recv() {
                 Ok(Ok(img)) => {
                     if self.save_settings.borrow().copy_on_clipboard {
                         self.clipboard = Some(start_thread_copy_to_clipboard(&img));
                     }
-
-                    let em = EditImage::new(img, ctx);
                     frame.set_decorations(true);
                     frame.set_fullscreen(false);
-                    frame.set_maximized(true);
+                    frame.set_maximized(false);
                     frame.set_visible(true);
+                    let em = EditImage::new(img, ctx);
                     self.state = EnumGuiState::EditImage(em);
                 }
                 Err(TryRecvError::Empty) => {
@@ -388,8 +385,8 @@ impl GlobalGuiState {
     }
 
     /// Richiama <i>EditImage::update()</i> e ne gestisce il valore di ritorno:
-    /// - <i>EditImageEvent::Saved</i>: avvia la procedura di salvataggio dell'immagine ritornata dal metodo (che è quindi uno screenshot, con eventuali
-    ///     annotazioni) nel formato corrispondente all'oggetto <i>ImageFormat</i> ritornato dal metodo;
+    /// - <i>EditImageEvent::Saved</i>: avvia la procedura di salvataggio dell'immagine ritornata dal metodo
+    ///  nel formato corrispondente all'oggetto <i>ImageFormat</i> ritornato;
     /// - <i>EditImageEvent::Aborted</i>: ritorna alla schermata principale eliminando tutti i progressi;
     /// - <i>EditImageEvent::Nil</i>: non è necessaria alcuna azione.
     ///
@@ -406,7 +403,9 @@ impl GlobalGuiState {
                 FrameEvent::Saved { image, format } => {
                     self.manage_save_request(image, format);
                 }
-                FrameEvent::Aborted => self.switch_to_main_menu(frame),
+                FrameEvent::Aborted => {
+                    self.switch_to_main_menu(frame);
+                }
                 FrameEvent::Nil => (),
             }
         } else {
@@ -416,8 +415,8 @@ impl GlobalGuiState {
 
     ///1. Lancia un thread che, consultando le <i>save_settings</i> dell'applicazione ed eventualmente
     /// mostrando un file dialog, ottiene il path del file di salvataggio dell'immagine;
-    /// 2. salva in <i>GlobalGuiState</i>il <i>Receiver</i> del canale di comunicazione con il thread lanciato
-    /// precedentemente. La presenza di tale <i>Receiver</i> nello stato globale causerà la disabilitazione
+    /// 2. salva in <i>GlobalGuiState</i>il <i>Receiver</i> del canale di comunicazione con il thread. 
+    /// La presenza di tale <i>Receiver</i> nello stato globale causerà la disabilitazione
     /// dell'altra finestra attualmente mostrata.
     fn manage_save_request(&mut self, image: RgbaImage, format: ImageFormat) {
         let rx = self.save_settings.borrow().compose_output_file_path(format);
@@ -461,7 +460,7 @@ impl GlobalGuiState {
 
     //----------------------SAVING --------------------------------------------------
     /// Esegue busy waiting sul canale di comunicazione con il thread worker iterando la chiamata al metodo <i>Receiver::try_recv()</i>:
-    /// - Fino a quando non compare un messaggio nel canale mostra uno spinner;
+    /// - Fino a quando non compare un messaggio nel canale, mostra uno spinner;
     /// - Se il canale viene chiuso inaspettatamente o se nel canale compare un oggetto <i>Err()</i>, scrive un messaggio nello stato di
     ///     errore globale dell'applicazione;
     /// - Se nel canale compare un oggetto Ok(), mostra un alert con un messaggio di conferma e riporta l'applicazione nella schermata
@@ -508,9 +507,8 @@ impl GlobalGuiState {
     }
 
     /// Esegue busy waiting sul canale di comunicazione con il thread worker che sta copiando l'immagine nella clipboard.<br>
-    /// Gestisce la ricezione sul canale sia di un messaggio di conferma che di un messaggio di errore, comunicando all'user
-    /// l'esito dell'operazione.
-    /// Mostra errore nel caso il canale venga chiuso inaspettatamente.
+    /// Mostra errore nel caso il canale venga chiuso inaspettatamente o se il thread ha inserito un messaggio di errore nel
+    /// canale.
     fn manage_clipboard(&mut self) {
         if let Some(rx) = &self.clipboard {
             match rx.try_recv() {
