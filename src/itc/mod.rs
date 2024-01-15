@@ -4,8 +4,7 @@ use std::{env, time::Duration};
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum ScreenshotDim {
-    //Enum per la scelta del tipo di screenshot
+pub enum ScreenshotDim {
     Fullscreen,
     Rectangle,
 }
