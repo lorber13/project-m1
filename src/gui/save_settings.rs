@@ -9,7 +9,6 @@ use std::rc::Rc;
 use std::cell::Cell;
 use crate::image_coding::ImageFormat;
 use std::path::PathBuf;
-use std::io::Write;
 use std::sync::mpsc::{channel, Receiver};
 
 

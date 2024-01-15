@@ -232,12 +232,11 @@ impl GlobalGuiState {
                 Ok(_) => {
                     match *area {
                         ScreenshotDim::Fullscreen => {
-                            frame.set_visible(true);
                             self.switch_to_edit_image(None, ctx, frame);
                         }
                         ScreenshotDim::Rectangle => {
                             frame.set_visible(false);
-                            self.switch_to_rect_selection(ctx);
+                            self.switch_to_rect_selection(frame);
                         }
                     }
                 }
@@ -255,31 +254,28 @@ impl GlobalGuiState {
     /// Lancia un thread worker per produrre lo screenshot che verrà ritagliato da RectSelection, memorizzando
     /// l'estremità <i>Receiver</i> del canale di comunicazione con tale thread nello stato corrente.
     ///
-    fn switch_to_rect_selection(&mut self, ctx: &eframe::egui::Context) {
+    fn switch_to_rect_selection(&mut self, frame: &mut eframe::Frame) {
+        frame.set_visible(false);
         self.state = EnumGuiState::LoadingRectSelection(
             self.screens_manager.start_thread_fullscreen_screenshot(),
         );
     }
 
-    /// Esegue <i>Receiver::try_recv()</i> per controllare se il thread worker ha prodotto lo screenshot:
+    /// Esegue <i>Receiver::recv()</i> per attendere che il thread worker produca lo screenshot:
     /// - Se il canale contiene <i>Ok(RgbaImage)</i>, cambia lo stato corrente in <i>EnumGuiState::RectSelection</i>;
     /// - Se il canale contiene <i>Err(&'static str)</i> o se il canale è stato chiuso, scrive l'errore nello stato
     ///     globale dell'applicazione;
-    /// - Se il canale è ancora vuoto, richiede un nuovo refresh della gui.
-    ///
-    /// <i>NOTA: Si è scelta una soluzione con busy wait per evitare che il main thread rimanga in attesa bloccante di
-    /// un altro thread, la cui computazione può potenzialmente fallire.</i>
     ///
     /// <h3>Panics:</h3>
     /// Nel caso <i>self.state</i> sia diverso da <i>EnumGuiState::LoadingRectSelection</i>.
     fn load_rect_selection(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
         match &mut self.state {
-            EnumGuiState::LoadingRectSelection(r) => match r.try_recv() {
+            EnumGuiState::LoadingRectSelection(r) => match r.recv() {
                 Ok(msg) => {
-                    frame.set_visible(true);
-                    frame.set_fullscreen(true);
                     match msg {
                         Ok(img) => {
+                            frame.set_visible(true);
+                            frame.set_fullscreen(true);
                             let rs = RectSelection::new(img, ctx);
                             self.state = EnumGuiState::RectSelection(rs);
                         }
@@ -288,21 +284,16 @@ impl GlobalGuiState {
                                 .borrow_mut()
                                 .replace("An error occurred. Impossible to continue.".to_string());
                             let _ = writeln!(std::io::stderr(), "Error: {}", error_message);
+                            self.switch_to_main_menu(frame);
                         }
                     }
                 }
-
-                Err(TryRecvError::Disconnected) => {
-                    frame.set_visible(true);
+                Err(_) => {
                     self.alert.borrow_mut().replace(
                         "An error occurred when trying to start the service. Please retry."
                             .to_string(),
                     );
                     self.switch_to_main_menu(frame);
-                }
-                Err(TryRecvError::Empty) => {
-                    frame.set_visible(false); // necessario per la scomparsa della finestra
-                    ctx.request_repaint();
                 }
             },
 
@@ -319,7 +310,6 @@ impl GlobalGuiState {
         if let EnumGuiState::RectSelection(ref mut rs) = self.state {
             ctx.request_repaint(); //per evitare il bug durante la transizione
             if let Some((rect, rgba)) = rs.update(ctx) {
-                frame.set_visible(true);
                 self.switch_to_edit_image(Some((rect, rgba)), ctx, frame);
             }
         } else {
@@ -344,6 +334,10 @@ impl GlobalGuiState {
         frame: &mut eframe::Frame,
     ) {
         if let Some((rect, img)) = opt_rect_img {
+            frame.set_decorations(true);
+        frame.set_fullscreen(false);
+        frame.set_maximized(false);
+        frame.set_visible(true);
             self.state =
                 EnumGuiState::LoadingEditImage(image_coding::start_thread_crop_image(rect, img));
         } else {
@@ -376,8 +370,10 @@ impl GlobalGuiState {
                     }
 
                     let em = EditImage::new(img, ctx);
-                    frame.set_fullscreen(false);
-                    frame.set_visible(true);
+                    frame.set_decorations(true);
+        frame.set_fullscreen(false);
+        frame.set_maximized(true);
+        frame.set_visible(true);
                     self.state = EnumGuiState::EditImage(em);
                 }
                 Err(TryRecvError::Empty) => {
@@ -511,7 +507,7 @@ impl GlobalGuiState {
         frame.focus();
         match hn {
             HotkeyName::FullscreenScreenshot => self.switch_to_edit_image(None, ctx, frame),
-            HotkeyName::RectScreenshot => self.switch_to_rect_selection(ctx),
+            HotkeyName::RectScreenshot => self.switch_to_rect_selection(frame),
         }
     }
 
@@ -587,9 +583,6 @@ impl eframe::App for GlobalGuiState {
 
         self.registered_hotkeys.set_listen_enabled(true); //abilito di default l'ascolto delle hotkeys (potrà essere disabilitato dalle funzioni chiamate nei rami del match)
 
-        //gestione di eventuali operazioni sulla clipboard
-        self.manage_clipboard();
-
         match &mut self.state {
             EnumGuiState::MainMenu(..) => {
                 self.show_main_menu(ctx, frame, main_window_enabled);
@@ -604,6 +597,7 @@ impl eframe::App for GlobalGuiState {
                 self.show_rect_selection(ctx, frame);
             }
             EnumGuiState::LoadingEditImage(..) => {
+                self.manage_clipboard();
                 self.load_edit_image(ctx, frame);
             }
             EnumGuiState::EditImage(..) => {

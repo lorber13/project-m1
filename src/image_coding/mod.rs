@@ -5,11 +5,8 @@ use arboard::{Clipboard, ImageData};
 use eframe::emath::Rect;
 use image::{ImageError, RgbaImage};
 use std::fs::File;
-use std::io::Write;
-use std::{
-    io::stdout,
-    sync::mpsc::{channel, Receiver},
-};
+use std::vec;
+use std::sync::mpsc::{channel, Receiver};
 
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -121,8 +118,8 @@ pub fn start_thread_save_image(
 fn save_image(file_output: std::path::PathBuf, img: RgbaImage) -> image::ImageResult<()> {
     if let Some(ext) = file_output.extension() {
         if ImageFormat::available_formats().contains(&ImageFormat::from(ext.to_str().unwrap())) {
-            return match ext.to_str().unwrap() {
-                "Gif" => {
+            return match ext.to_str().unwrap().into() {
+                ImageFormat::Gif => {
                     let file = File::create(file_output).unwrap();
                     let mut encoder = image::codecs::gif::GifEncoder::new_with_speed(file, 30);
                     encoder.encode(&img, img.width(), img.height(), image::ColorType::Rgba8)
