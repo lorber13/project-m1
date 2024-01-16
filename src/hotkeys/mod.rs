@@ -141,7 +141,7 @@ impl RegisteredHotkeys {
         let _ = self.update_changes();
     }
 
-    pub fn serialize(self: &Arc<Self>)
+    pub fn start_thread_serialize(self: &Arc<Self>)
     {
         let arc_clone = self.clone();
         std::thread::spawn(move ||
