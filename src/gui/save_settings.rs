@@ -78,7 +78,7 @@ struct Memory
 
 impl SaveSettings
 {
-    const CONFIG_FILE_NAME: &'static str = ".config_save";
+    const CONFIG_FILE_NAME: &'static str = ".config_save.json";
 
     ///Controlla se esiste il file contenente l'oggetto serializzato: in caso positivo, lo 
     /// deserializza; altrimenti, crea un oggetto nuovo con valori di default.
