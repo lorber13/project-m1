@@ -2,7 +2,7 @@ pub mod utils;
 
 use crate::gui::edit_image::utils::{color_ui, create_line, shape_ui, stroke_preview, width_ui};
 use crate::gui::loading::show_loading;
-use crate::image_coding::{ImageFormat, self};
+use crate::image_coding::{self, ImageFormat};
 use eframe::egui::{
     pos2, vec2, Align, CentralPanel, Color32, ColorImage, Context, InnerResponse, Key, Layout,
     Painter, Pos2, Rect, Response, Rounding, Sense, Shape, Stroke, TextureHandle, TextureOptions,
@@ -29,7 +29,7 @@ pub enum FrameEvent {
     Saved {
         image: RgbaImage,
         format: ImageFormat,
-        clipboard_receiver: Receiver<Result<(), arboard::Error>>
+        clipboard_receiver: Receiver<Result<(), arboard::Error>>,
     },
     Aborted,
     Nil,
@@ -126,12 +126,12 @@ impl EditImage {
             .show(ctx, |ui| match self.receive_thread.try_recv() {
                 Ok(image) => {
                     let clipboard_receiver = image_coding::start_thread_copy_to_clipboard(&image);
-                    return FrameEvent::Saved {
-                    image,
-                    format: self.format,
-                    clipboard_receiver
+                    FrameEvent::Saved {
+                        image,
+                        format: self.format,
+                        clipboard_receiver,
                     }
-                },
+                }
                 Err(error) => match error {
                     TryRecvError::Empty => {
                         show_loading(ctx);
