@@ -119,7 +119,7 @@ impl HotkeysSettings
 
                                     match self.registered_hotkeys.update_changes()
                                     {
-                                        Ok(()) => { ret = SettingsEvent::Saved; },
+                                        Ok(()) => { self.registered_hotkeys.serialize(); ret = SettingsEvent::Saved; },
                                         Err(e) => { self.alert.borrow_mut().replace(e); }
                                     };
                                     

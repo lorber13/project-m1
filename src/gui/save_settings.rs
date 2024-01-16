@@ -10,7 +10,6 @@ use std::rc::Rc;
 use crate::image_coding::ImageFormat;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
-use std::io::Read;
 
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -81,6 +80,8 @@ impl SaveSettings
 {
     const CONFIG_FILE_NAME: &'static str = ".config_save";
 
+    ///Controlla se esiste il file contenente l'oggetto serializzato: in caso positivo, lo 
+    /// deserializza; altrimenti, crea un oggetto nuovo con valori di default.
     pub fn new(alert: Rc<RefCell<Option<String>>>) -> Self
     {
         match std::fs::File::open(Self::CONFIG_FILE_NAME)

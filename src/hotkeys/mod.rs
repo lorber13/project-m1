@@ -2,7 +2,8 @@ use eframe::egui::Context;
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use std::cmp::Ordering;
-use std::io::{Read, BufReader, BufRead, BufWriter, Write};
+use std::fs::File;
+use std::io::{ BufReader, BufRead, Write};
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -92,8 +93,12 @@ pub struct RegisteredHotkeys {
 impl RegisteredHotkeys {
     const CONFIG_FILE_NAME: &'static str = ".config_hotkeys";
 
+    /// Controlla se esiste il file in cui sono state salvate permanentemente le impostazioni: se esiste,
+    /// lo legge e usa le informazioni per riempire la nuova struct.
+    /// Altrimenti, assegna alla nuova struct valori di default:
     /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti.
     ///Imposta <i>listen_enabled</i> a true di default.
+    /// 
     ///Ritorna la struttura già incapsulata in un <i>Arc</i>.
     pub fn new() -> Arc<Self> {
         let mut vec = vec![];
@@ -113,35 +118,46 @@ impl RegisteredHotkeys {
         {
             Ok(f) =>
             {
-                let mut buf = BufReader::new(f);
-                let mut line = String::new();
-                let mut i = 0;
-                while let Ok(n) = buf.read_line(&mut line)
-                {
-                    if n > 0 {ret.vec.get(i).unwrap().write().unwrap().replace(line.clone());}
-                    i += 1;
-                }
-                let _ = ret.update_changes();
+                ret.deserialize(f);
             }
             _ => ()
         }
         ret
     }
 
-    pub fn serialize(self: Arc<Self>)
+    pub fn deserialize(self: &Arc<Self>, f: File)
+    {
+        let mut buf = BufReader::new(f);
+        let mut line = String::new();
+        let mut i = 0;
+        while let Ok(n) = buf.read_line(&mut line)
+        {
+            if n == 0 {break;}
+            let _ = line.pop();
+            if n > 1 {self.vec.get(i).unwrap().write().unwrap().replace(line.clone());}
+            i += 1;
+            line = String::new();
+        }
+        let _ = self.update_changes();
+    }
+
+    pub fn serialize(self: &Arc<Self>)
     {
         let arc_clone = self.clone();
         std::thread::spawn(move ||
         {
-            if let Ok(f) = std::fs::File::create(Self::CONFIG_FILE_NAME)
+            if let Ok(mut f) = std::fs::File::create(Self::CONFIG_FILE_NAME)
             {
-                for rl in arc_clone.backup
+                for rl in arc_clone.backup.iter()
                 {
-                    let g = rl.read().unwrap();
-                    if let Some((_,s)) = *g {
-                        f.write();
+                    let g = rl.read().unwrap().clone();
+                    if let Some((_,s)) = g{
+                        let mut s_clone = s.clone();
+                        s_clone.push('\n');
+                        let _ = f.write(s_clone.as_bytes());
                     }else{
-                        f.write("");
+                        let s = String::from("\n");
+                        let _ = f.write(s.as_bytes());
                     }
                 }
 
