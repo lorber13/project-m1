@@ -4,7 +4,8 @@ use std::{env, time::Duration};
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub enum ScreenshotDim {
+pub enum ScreenshotDim {
+
     Fullscreen,
     Rectangle,
 }
@@ -35,6 +36,8 @@ pub struct Delay {
 const DELAY_ANIMATIONS_WINDOWS: f32 = 0.25;
 ///Secondi
 const DELAY_ANIMATIONS_LINUX: f32 = 0.25;
+///Secondi
+const DELAY_ANIMATIONS_MACOS: f32 = 0.25;
 
 ///Ritorna la durata dell'animazione di scomparsa della finestra nello specifico
 /// sistema operativo in uso.
@@ -44,6 +47,7 @@ pub fn get_animations_delay() -> Duration {
     match env::consts::OS {
         "windows" => Duration::from_secs_f32(DELAY_ANIMATIONS_WINDOWS),
         "linux" => Duration::from_secs_f32(DELAY_ANIMATIONS_LINUX),
+        "macos" => Duration::from_secs_f32(DELAY_ANIMATIONS_MACOS),
         _ => Duration::from_secs(1),
     }
 }
