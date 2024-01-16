@@ -127,7 +127,7 @@ impl GlobalGuiState {
         frame.set_decorations(true);
         frame.set_fullscreen(false);
         frame.set_maximized(false);
-        frame.set_window_size(Vec2::new(500.0, 300.0));
+        frame.set_window_size(Vec2::new(600.0, 300.0));
         frame.set_visible(true);
         self.state = EnumGuiState::MainMenu(MainMenu::new(
             self.alert.clone(),
