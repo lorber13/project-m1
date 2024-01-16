@@ -3,7 +3,7 @@ use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use std::cmp::Ordering;
 use std::fs::File;
-use std::io::{ BufReader, BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
@@ -98,7 +98,7 @@ impl RegisteredHotkeys {
     /// Altrimenti, assegna alla nuova struct valori di default:
     /// Crea i due <i>Vec</i> di <i>RwLock</i> inizialmente vuoti.
     ///Imposta <i>listen_enabled</i> a true di default.
-    /// 
+    ///
     ///Ritorna la struttura già incapsulata in un <i>Arc</i>.
     pub fn new() -> Arc<Self> {
         let mut vec = vec![];
@@ -114,56 +114,51 @@ impl RegisteredHotkeys {
             listen_enabled: RwLock::new(true),
         });
 
-        match std::fs::File::open(Self::CONFIG_FILE_NAME)
-        {
-            Ok(f) =>
-            {
-                ret.deserialize(f);
-            }
-            _ => ()
+        if let Ok(f) = File::open(Self::CONFIG_FILE_NAME) {
+            ret.deserialize(f);
         }
         ret
     }
 
-    pub fn deserialize(self: &Arc<Self>, f: File)
-    {
+    pub fn deserialize(self: &Arc<Self>, f: File) {
         let mut buf = BufReader::new(f);
         let mut line = String::new();
         let mut i = 0;
-        while let Ok(n) = buf.read_line(&mut line)
-        {
-            if n == 0 {break;}
+        while let Ok(n) = buf.read_line(&mut line) {
+            if n == 0 {
+                break;
+            }
             let _ = line.pop();
-            if n > 1 {self.vec.get(i).unwrap().write().unwrap().replace(line.clone());}
+            if n > 1 {
+                self.vec
+                    .get(i)
+                    .unwrap()
+                    .write()
+                    .unwrap()
+                    .replace(line.clone());
+            }
             i += 1;
             line = String::new();
         }
         let _ = self.update_changes();
     }
 
-    pub fn start_thread_serialize(self: &Arc<Self>)
-    {
+    pub fn start_thread_serialize(self: &Arc<Self>) {
         let arc_clone = self.clone();
-        std::thread::spawn(move ||
-        {
-            if let Ok(mut f) = std::fs::File::create(Self::CONFIG_FILE_NAME)
-            {
-                for rl in arc_clone.backup.iter()
-                {
+        std::thread::spawn(move || {
+            if let Ok(mut f) = File::create(Self::CONFIG_FILE_NAME) {
+                for rl in arc_clone.backup.iter() {
                     let g = rl.read().unwrap().clone();
-                    if let Some((_,s)) = g{
+                    if let Some((_, s)) = g {
                         let mut s_clone = s.clone();
                         s_clone.push('\n');
                         let _ = f.write(s_clone.as_bytes());
-                    }else{
+                    } else {
                         let s = String::from("\n");
                         let _ = f.write(s.as_bytes());
                     }
                 }
-
             }
-            
-            
         });
     }
 
@@ -205,7 +200,7 @@ impl RegisteredHotkeys {
     ///Copia il contenuto di <i>self::backup</i> in <i>self::vec</i> in modo che quest'ultimo possa essere
     ///modificato a partire da dati consistenti.
     /// Per non bloccare il main thread e rendere l'operazione veloce a prescindere dal numero di hotkeys,
-    /// un thread padre lancia un figlio per ogni entry dei vettori, i thread figli eseguono la copia in 
+    /// un thread padre lancia un figlio per ogni entry dei vettori, i thread figli eseguono la copia in
     /// parallelo.
     ///
     ///<b>Ritorna:</b> un <i>Receiver</i> su cui è possibile mettersi in ascolto per attendere che l'operazione di copia
@@ -253,8 +248,7 @@ impl RegisteredHotkeys {
                     }
                 }))
             }
-            for j in jh
-            {
+            for j in jh {
                 let _ = j.join();
             }
             let _ = tx.send(());

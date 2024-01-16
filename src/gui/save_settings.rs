@@ -84,18 +84,12 @@ impl SaveSettings
     /// deserializza; altrimenti, crea un oggetto nuovo con valori di default.
     pub fn new(alert: Rc<RefCell<Option<String>>>) -> Self
     {
-        match std::fs::File::open(Self::CONFIG_FILE_NAME)
+        if let Ok(f) = std::fs::File::open(Self::CONFIG_FILE_NAME)
         {
-            Ok(f) =>
-            {
-                match serde_json::from_reader(f)
+                if let Ok(mem) = serde_json::from_reader(f)
                 {
-                    Ok(mem) => return Self{mem, alert},
-                    _ => ()
+                    return Self{mem, alert}
                 }
-
-            }
-            _ => ()
         }
         Self {mem: Memory {default_dir: DefaultDir { enabled: false, path: "".to_string() }, 
                 default_name: DefaultName { enabled: false, name: "".to_string(), mode: DefaultNameMode::Timestamp,},
@@ -313,7 +307,7 @@ impl SaveSettings
     /// - <i>Some()<i>, contenente il path scritto sotto forma di stringa altrimenti.
     pub fn get_default_dir(&self) -> Option<String>
     {
-        if !self.mem.default_dir.enabled || self.mem.default_dir.path.len() == 0 
+        if !self.mem.default_dir.enabled || self.mem.default_dir.path.is_empty()
             || !std::path::Path::new(&self.mem.default_dir.path).exists() {return None;}
 
         Some(self.mem.default_dir.path.clone())
