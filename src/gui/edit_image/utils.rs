@@ -512,27 +512,31 @@ pub fn write_annotation_to_image(annotation: &Shape, image_blend: &mut Blend<Rgb
 /// Scrive sull'immagine in memoria un rettangolo.
 /// In particolare, gestisce anche il caso di rettangoli con bordo spesso (spessore diverso da 1 pixel)
 fn write_rectangle_with_width(image_blend: &mut Blend<RgbaImage>, rect_shape: &RectShape) {
-    draw_filled_rect_mut(
-        image_blend,
-        imageproc::rect::Rect::at(
-            rect_shape.rect.left_top().x as i32,
-            rect_shape.rect.left_top().y as i32,
-        )
-        .of_size(
-            rect_shape.rect.width() as u32,
-            rect_shape.rect.height() as u32,
-        ),
-        Rgba(rect_shape.fill.to_array()),
-    );
+    if rect_shape.rect.width() as u32 > 0 && rect_shape.rect.height() as u32 > 0 {
+        draw_filled_rect_mut(
+            image_blend,
+            imageproc::rect::Rect::at(
+                rect_shape.rect.left_top().x as i32,
+                rect_shape.rect.left_top().y as i32,
+            )
+            .of_size(
+                rect_shape.rect.width() as u32,
+                rect_shape.rect.height() as u32,
+            ),
+            Rgba(rect_shape.fill.to_array()),
+        );
+    }
     let big_rect = rect_shape.rect.expand(rect_shape.stroke.width / 2.0);
     for delta in 0..rect_shape.stroke.width as i32 {
         let rect = big_rect.shrink(delta as f32);
-        draw_hollow_rect_mut(
-            image_blend,
-            imageproc::rect::Rect::at(rect.left_top().x as i32, rect.left_top().y as i32)
-                .of_size(rect.width() as u32, rect.height() as u32),
-            Rgba(rect_shape.stroke.color.to_array()),
-        );
+        if rect.width() as u32 > 0 && rect.height() as u32 > 0 {
+            draw_hollow_rect_mut(
+                image_blend,
+                imageproc::rect::Rect::at(rect.left_top().x as i32, rect.left_top().y as i32)
+                    .of_size(rect.width() as u32, rect.height() as u32),
+                Rgba(rect_shape.stroke.color.to_array()),
+            );
+        }
     }
 }
 
